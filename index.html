@@ -1,0 +1,970 @@
+<!doctype html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="UPTET Quiz" />
+  <title>UPTET/SUPERTET Quiz Player</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --dark: #0f172a;
+      --dark2: #1e293b;
+      --green-bg: #dcfce7;
+      --green: #166534;
+      --green-line: #86efac;
+      --red-bg: #ffe4e6;
+      --red: #9f1239;
+      --amber-bg: #fef3c7;
+      --amber: #92400e;
+      --blue-bg: #dbeafe;
+      --blue: #1e40af;
+      --shadow: 0 18px 50px rgba(15, 23, 42, .08);
+      --radius: 24px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+    button, textarea, select, input { font: inherit; }
+    button { touch-action: manipulation; cursor: pointer; }
+    .page { min-height: 100svh; padding: 16px; }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .pad { padding: 18px; }
+    .header {
+      padding: 18px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { font-size: clamp(24px, 5vw, 34px); line-height: 1.1; margin-bottom: 8px; }
+    h2 { font-size: clamp(20px, 4vw, 26px); line-height: 1.25; }
+    h3 { font-size: 18px; margin-bottom: 10px; }
+    .muted { color: var(--muted); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .grid { display: grid; gap: 12px; }
+    .two { grid-template-columns: 1fr; }
+    .examGrid { display: grid; grid-template-columns: 1fr; }
+    .btn {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px;
+      background: #fff;
+      color: var(--ink);
+      font-weight: 700;
+      min-height: 48px;
+    }
+    .btn.primary { background: var(--dark); border-color: var(--dark); color: #fff; }
+    .btn.danger { background: var(--red-bg); border-color: #fecdd3; color: var(--red); }
+    .btn.warn { background: var(--amber-bg); border-color: #fde68a; color: var(--amber); }
+    .btn.good { background: var(--green-bg); border-color: var(--green-line); color: var(--green); }
+    .btn.blue { background: var(--blue-bg); border-color: #bfdbfe; color: var(--blue); }
+    .btn.block { width: 100%; }
+    .btn:disabled { opacity: .6; cursor: not-allowed; }
+    .select, .input, .textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      color: var(--ink);
+      padding: 12px;
+      min-height: 48px;
+    }
+    .textarea { min-height: 260px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; line-height: 1.45; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      background: #f1f5f9;
+      padding: 6px 11px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #334155;
+    }
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #f8fafc;
+      padding: 14px;
+    }
+    .option {
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 18px;
+      padding: 15px;
+      min-height: 56px;
+      line-height: 1.35;
+    }
+    .option.selected { background: var(--dark); color: #fff; border-color: var(--dark); }
+    .option.reviewCorrect { background: var(--green-bg); color: var(--green); border-color: var(--green-line); }
+    .option.reviewWrong { background: var(--red-bg); color: var(--red); border-color: #fda4af; }
+    .nav3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 18px; }
+    .palette {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+    .palbtn {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 12px;
+      min-height: 44px;
+      font-weight: 800;
+    }
+    .palbtn.current { background: var(--dark); color: #fff; border-color: var(--dark); }
+    .palbtn.done { background: var(--green-bg); color: var(--green); border-color: var(--green-line); }
+    .sidebar { border-top: 1px solid var(--line); background: #f8fafc; padding: 18px; }
+    .hidden { display: none !important; }
+    .modalBackdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(15, 23, 42, .45);
+    }
+    .modal { max-width: 460px; width: 100%; background: #fff; border-radius: 24px; padding: 20px; box-shadow: var(--shadow); }
+    .notice { border: 1px solid var(--line); border-radius: 18px; background: #f8fafc; padding: 14px; }
+    .notice.warn { background: var(--amber-bg); border-color: #fde68a; color: #78350f; }
+    .notice.good { background: var(--green-bg); border-color: var(--green-line); color: var(--green); }
+    .notice.danger { background: var(--red-bg); border-color: #fda4af; color: var(--red); }
+    .reviewItem { border: 1px solid var(--line); border-radius: 18px; background: #fff; padding: 14px; }
+    .small { font-size: 13px; }
+    .footerSpace { height: env(safe-area-inset-bottom); }
+    @media (min-width: 780px) {
+      .page { padding: 28px; }
+      .pad { padding: 24px; }
+      .header { padding: 24px; }
+      .two { grid-template-columns: 1fr 1fr; }
+      .examGrid { grid-template-columns: 1fr 280px; }
+      .sidebar { border-top: 0; border-left: 1px solid var(--line); }
+      .palette { grid-template-columns: repeat(5, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="page"></div>
+  <script id="default-set" type="application/json">{
+  "title": "UPTET/SUPERTET Maths Topic 2: संख्या पद्धति",
+  "durationMinutes": 30,
+  "questions": [
+    {
+      "id": "math-topic2-20260611-001",
+      "subject": "गणित",
+      "topic": "संख्या वर्गीकरण",
+      "question": "निम्न में से कौन-सा कथन सही है?",
+      "options": [
+        "0 प्राकृतिक संख्या है, पर पूर्ण संख्या नहीं",
+        "0 पूर्ण संख्या है, पर सामान्यतः प्राकृतिक संख्या नहीं मानी जाती",
+        "हर पूर्णांक प्राकृतिक संख्या होता है",
+        "हर परिमेय संख्या पूर्णांक होती है"
+      ],
+      "answer": 1,
+      "explanation": "पूर्ण संख्याएँ 0 से शुरू होती हैं, जबकि प्राथमिक गणित में प्राकृतिक संख्याएँ सामान्यतः 1, 2, 3... मानी जाती हैं।"
+    },
+    {
+      "id": "math-topic2-20260611-002",
+      "subject": "गणित",
+      "topic": "संख्या वर्गीकरण",
+      "question": "संख्याएँ −7, 0, √9, 2/3 और √5 दी गई हैं। इनमें पूर्णांकों की संख्या कितनी है?",
+      "options": [
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "answer": 1,
+      "explanation": "−7, 0 और √9 = 3 पूर्णांक हैं। 2/3 और √5 पूर्णांक नहीं हैं।"
+    },
+    {
+      "id": "math-topic2-20260611-003",
+      "subject": "गणित",
+      "topic": "संख्या वर्गीकरण",
+      "question": "निम्न में से कौन-सी संख्या अपरिमेय है?",
+      "options": [
+        "√49",
+        "22/7",
+        "0.3333...",
+        "√2 + 1"
+      ],
+      "answer": 3,
+      "explanation": "√2 अपरिमेय है और उसमें 1 जोड़ने पर भी संख्या अपरिमेय रहती है। बाकी विकल्प परिमेय हैं।"
+    },
+    {
+      "id": "math-topic2-20260611-004",
+      "subject": "गणित",
+      "topic": "संख्या वर्गीकरण",
+      "question": "यदि n एक विषम पूर्णांक है, तो n² + n हमेशा कैसा होगा?",
+      "options": [
+        "विषम",
+        "सम",
+        "अभाज्य",
+        "अपरिमेय"
+      ],
+      "answer": 1,
+      "explanation": "विषम संख्या का वर्ग विषम होता है। विषम + विषम = सम, इसलिए n² + n सम होगा।"
+    },
+    {
+      "id": "math-topic2-20260611-005",
+      "subject": "गणित",
+      "topic": "संख्या वर्गीकरण",
+      "question": "−3 किस संख्या-वर्ग में अवश्य आता है?",
+      "options": [
+        "प्राकृतिक संख्या और पूर्ण संख्या",
+        "पूर्ण संख्या और परिमेय संख्या",
+        "पूर्णांक और परिमेय संख्या",
+        "केवल अपरिमेय संख्या"
+      ],
+      "answer": 2,
+      "explanation": "−3 पूर्णांक है और इसे −3/1 के रूप में लिखा जा सकता है, इसलिए यह परिमेय भी है।"
+    },
+    {
+      "id": "math-topic2-20260611-006",
+      "subject": "गणित",
+      "topic": "संख्या वर्गीकरण",
+      "question": "निम्न में से कौन-सा विकल्प केवल परिमेय संख्याएँ रखता है?",
+      "options": [
+        "√16, −5/2, 0.75",
+        "√3, 1/2, 4",
+        "π, 0, 7",
+        "√10, −2, 3/5"
+      ],
+      "answer": 0,
+      "explanation": "√16 = 4, −5/2 और 0.75 तीनों परिमेय हैं। अन्य विकल्पों में √3, π या √10 जैसे अपरिमेय पद हैं।"
+    },
+    {
+      "id": "math-topic2-20260611-007",
+      "subject": "गणित",
+      "topic": "संख्या वर्गीकरण",
+      "question": "कथन पढ़िए: 1. हर प्राकृतिक संख्या पूर्ण संख्या है। 2. हर पूर्ण संख्या पूर्णांक है। 3. हर परिमेय संख्या पूर्णांक है। सही विकल्प चुनिए।",
+      "options": [
+        "केवल कथन 1 सही है",
+        "कथन 1 और 2 सही हैं",
+        "कथन 2 और 3 सही हैं",
+        "तीनों सही हैं"
+      ],
+      "answer": 1,
+      "explanation": "प्राकृतिक संख्याएँ पूर्ण संख्याओं में और पूर्ण संख्याएँ पूर्णांकों में आती हैं। लेकिन 1/2 परिमेय है, पूर्णांक नहीं।"
+    },
+    {
+      "id": "math-topic2-20260611-008",
+      "subject": "गणित",
+      "topic": "संख्या वर्गीकरण",
+      "question": "तीन क्रमागत पूर्णांक −1, 0 और 1 हैं। इनके योग के बारे में सही कथन कौन-सा है?",
+      "options": [
+        "योग प्राकृतिक संख्या है",
+        "योग पूर्ण संख्या और सम संख्या है",
+        "योग ऋणात्मक विषम संख्या है",
+        "योग अपरिमेय संख्या है"
+      ],
+      "answer": 1,
+      "explanation": "−1 + 0 + 1 = 0। 0 पूर्ण संख्या है और 2 से विभाज्य होने के कारण सम माना जाता है।"
+    },
+    {
+      "id": "math-topic2-20260611-009",
+      "subject": "गणित",
+      "topic": "अभाज्य, भाज्य, सह-अभाज्य, गुणनखंड और गुणज",
+      "question": "संख्या 1 के बारे में सबसे सही कथन कौन-सा है?",
+      "options": [
+        "1 अभाज्य है",
+        "1 भाज्य है",
+        "1 न अभाज्य है न भाज्य",
+        "1 केवल सम संख्या है"
+      ],
+      "answer": 2,
+      "explanation": "अभाज्य संख्या के ठीक दो गुणनखंड होते हैं। 1 का केवल एक गुणनखंड 1 है, इसलिए यह न अभाज्य है न भाज्य।"
+    },
+    {
+      "id": "math-topic2-20260611-010",
+      "subject": "गणित",
+      "topic": "अभाज्य, भाज्य, सह-अभाज्य, गुणनखंड और गुणज",
+      "question": "निम्न में से कौन-सा युग्म सह-अभाज्य है, जबकि दोनों संख्याएँ अभाज्य नहीं हैं?",
+      "options": [
+        "14 और 25",
+        "15 और 21",
+        "18 और 27",
+        "22 और 33"
+      ],
+      "answer": 0,
+      "explanation": "14 और 25 का महत्तम समापवर्तक 1 है, इसलिए वे सह-अभाज्य हैं; दोनों स्वयं अभाज्य नहीं हैं।"
+    },
+    {
+      "id": "math-topic2-20260611-011",
+      "subject": "गणित",
+      "topic": "अभाज्य, भाज्य, सह-अभाज्य, गुणनखंड और गुणज",
+      "question": "84 का अभाज्य गुणनखंडन करने पर कुल कितने अभाज्य गुणनखंड मिलते हैं, यदि पुनरावृत्ति भी गिनी जाए?",
+      "options": [
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "answer": 1,
+      "explanation": "84 = 2 × 2 × 3 × 7, इसलिए पुनरावृत्ति सहित 4 अभाज्य गुणनखंड हैं।"
+    },
+    {
+      "id": "math-topic2-20260611-012",
+      "subject": "गणित",
+      "topic": "अभाज्य, भाज्य, सह-अभाज्य, गुणनखंड और गुणज",
+      "question": "वह सबसे छोटी संख्या कौन-सी है जिसके ठीक तीन धनात्मक गुणनखंड हैं?",
+      "options": [
+        "2",
+        "3",
+        "4",
+        "6"
+      ],
+      "answer": 2,
+      "explanation": "4 के गुणनखंड 1, 2 और 4 हैं। किसी अभाज्य संख्या के वर्ग के ठीक तीन गुणनखंड होते हैं।"
+    },
+    {
+      "id": "math-topic2-20260611-013",
+      "subject": "गणित",
+      "topic": "अभाज्य, भाज्य, सह-अभाज्य, गुणनखंड और गुणज",
+      "question": "75 के भिन्न अभाज्य गुणनखंडों का योग कितना है?",
+      "options": [
+        "8",
+        "11",
+        "15",
+        "25"
+      ],
+      "answer": 0,
+      "explanation": "75 = 3 × 5 × 5। भिन्न अभाज्य गुणनखंड 3 और 5 हैं, उनका योग 8 है।"
+    },
+    {
+      "id": "math-topic2-20260611-014",
+      "subject": "गणित",
+      "topic": "लघुत्तम समापवर्त्य और महत्तम समापवर्तक",
+      "question": "18, 24 और 36 का लघुत्तम समापवर्त्य और महत्तम समापवर्तक क्रमशः क्या हैं?",
+      "options": [
+        "72 और 6",
+        "144 और 6",
+        "72 और 12",
+        "36 और 6"
+      ],
+      "answer": 0,
+      "explanation": "18 = 2×3², 24 = 2³×3, 36 = 2²×3²। ल.स. = 72 और म.स. = 6।"
+    },
+    {
+      "id": "math-topic2-20260611-015",
+      "subject": "गणित",
+      "topic": "लघुत्तम समापवर्त्य और महत्तम समापवर्तक",
+      "question": "दो संख्याओं का म.स. 12 और ल.स. 180 है। यदि एक संख्या 36 है, तो दूसरी संख्या क्या होगी?",
+      "options": [
+        "48",
+        "54",
+        "60",
+        "72"
+      ],
+      "answer": 2,
+      "explanation": "दो संख्याओं का गुणनफल = म.स. × ल.स.। दूसरी संख्या = 12×180/36 = 60।"
+    },
+    {
+      "id": "math-topic2-20260611-016",
+      "subject": "गणित",
+      "topic": "लघुत्तम समापवर्त्य और महत्तम समापवर्तक",
+      "question": "तीन घंटियाँ क्रमशः 12, 15 और 20 मिनट बाद बजती हैं। वे एक साथ अभी बजी हैं। अगली बार कितने मिनट बाद फिर साथ बजेंगी?",
+      "options": [
+        "40",
+        "45",
+        "60",
+        "120"
+      ],
+      "answer": 2,
+      "explanation": "साथ बजने का समय 12, 15 और 20 का ल.स. होगा। ल.स. = 60 मिनट।"
+    },
+    {
+      "id": "math-topic2-20260611-017",
+      "subject": "गणित",
+      "topic": "लघुत्तम समापवर्त्य और महत्तम समापवर्तक",
+      "question": "ऐसी सबसे छोटी संख्या कौन-सी है जिसे 5, 6 और 8 से भाग देने पर हर बार शेष 3 बचे?",
+      "options": [
+        "83",
+        "123",
+        "243",
+        "363"
+      ],
+      "answer": 1,
+      "explanation": "संख्या 5, 6 और 8 के ल.स. से 3 अधिक होगी। ल.स. = 120, इसलिए संख्या 123 है।"
+    },
+    {
+      "id": "math-topic2-20260611-018",
+      "subject": "गणित",
+      "topic": "लघुत्तम समापवर्त्य और महत्तम समापवर्तक",
+      "question": "84 सेमी, 98 सेमी और 126 सेमी लंबाई की पट्टियों को बराबर सबसे बड़े टुकड़ों में काटना है। प्रत्येक टुकड़े की अधिकतम लंबाई क्या होगी?",
+      "options": [
+        "7 सेमी",
+        "14 सेमी",
+        "21 सेमी",
+        "28 सेमी"
+      ],
+      "answer": 1,
+      "explanation": "सबसे बड़े समान टुकड़े की लंबाई 84, 98 और 126 का म.स. होगी। म.स. = 14 सेमी।"
+    },
+    {
+      "id": "math-topic2-20260611-019",
+      "subject": "गणित",
+      "topic": "लघुत्तम समापवर्त्य और महत्तम समापवर्तक",
+      "question": "9, 12 और 15 से पूर्णतः विभाज्य सबसे छोटी पूर्ण वर्ग संख्या कौन-सी है?",
+      "options": [
+        "180",
+        "360",
+        "900",
+        "1440"
+      ],
+      "answer": 2,
+      "explanation": "ल.स. = 180 = 2²×3²×5। पूर्ण वर्ग बनाने के लिए 5 से गुणा करना होगा, इसलिए 900।"
+    },
+    {
+      "id": "math-topic2-20260611-020",
+      "subject": "गणित",
+      "topic": "विभाज्यता नियम और शेषफल",
+      "question": "35□2 संख्या 9 से विभाज्य हो, तो □ में कौन-सा अंक आएगा?",
+      "options": [
+        "4",
+        "6",
+        "8",
+        "9"
+      ],
+      "answer": 2,
+      "explanation": "अंकों का योग 3+5+□+2 = 10+□ है। 18 बनाने के लिए □ = 8 होगा।"
+    },
+    {
+      "id": "math-topic2-20260611-021",
+      "subject": "गणित",
+      "topic": "विभाज्यता नियम और शेषफल",
+      "question": "कोई संख्या 4 और 9 दोनों से विभाज्य है। वह अवश्य किससे विभाज्य होगी?",
+      "options": [
+        "13",
+        "27",
+        "36",
+        "72"
+      ],
+      "answer": 2,
+      "explanation": "4 और 9 सह-अभाज्य हैं, इसलिए संख्या उनके गुणनफल 36 से अवश्य विभाज्य होगी। 72 से होना आवश्यक नहीं।"
+    },
+    {
+      "id": "math-topic2-20260611-022",
+      "subject": "गणित",
+      "topic": "विभाज्यता नियम और शेषफल",
+      "question": "2^50 को 7 से भाग देने पर शेषफल क्या होगा?",
+      "options": [
+        "1",
+        "2",
+        "4",
+        "6"
+      ],
+      "answer": 2,
+      "explanation": "2³ = 8 का 7 से शेष 1 है। 50 = 3×16 + 2, इसलिए शेष 2² = 4 होगा।"
+    },
+    {
+      "id": "math-topic2-20260611-023",
+      "subject": "गणित",
+      "topic": "विभाज्यता नियम और शेषफल",
+      "question": "किसी संख्या को 11 से विभाज्य जाँचने के लिए कौन-सा नियम सही है?",
+      "options": [
+        "अंकों का योग 11 होना चाहिए",
+        "अंतिम दो अंक 11 से विभाज्य होने चाहिए",
+        "वैकल्पिक अंकों के योगों का अंतर 0 या 11 का गुणज होना चाहिए",
+        "अंतिम अंक 0 या 5 होना चाहिए"
+      ],
+      "answer": 2,
+      "explanation": "11 की विभाज्यता में बारी-बारी के अंकों के योगों का अंतर 0 या 11 का गुणज होना चाहिए।"
+    },
+    {
+      "id": "math-topic2-20260611-024",
+      "subject": "गणित",
+      "topic": "स्थानमान और संख्या रेखा",
+      "question": "संख्या 5,06,708 में अंक 6 का स्थानमान क्या है?",
+      "options": [
+        "6",
+        "60",
+        "600",
+        "6000"
+      ],
+      "answer": 3,
+      "explanation": "5,06,708 में 6 हजार के स्थान पर है, इसलिए उसका स्थानमान 6000 है।"
+    },
+    {
+      "id": "math-topic2-20260611-025",
+      "subject": "गणित",
+      "topic": "स्थानमान और संख्या रेखा",
+      "question": "0, 4, 7 और 9 अंकों का प्रत्येक एक बार प्रयोग करके बनने वाली 5 से विभाज्य सबसे बड़ी चार-अंकीय संख्या कौन-सी है?",
+      "options": [
+        "9740",
+        "9704",
+        "9470",
+        "9074"
+      ],
+      "answer": 0,
+      "explanation": "5 से विभाज्य संख्या का अंतिम अंक 0 या 5 होना चाहिए। दिए अंकों में 0 है; बाकी अंकों को घटते क्रम में रखने पर 9740 मिलता है।"
+    },
+    {
+      "id": "math-topic2-20260611-026",
+      "subject": "गणित",
+      "topic": "स्थानमान और संख्या रेखा",
+      "question": "संख्या रेखा पर −1/2 के बाईं ओर कौन-सी संख्या स्थित होगी?",
+      "options": [
+        "−1/4",
+        "0",
+        "−3/4",
+        "1/2"
+      ],
+      "answer": 2,
+      "explanation": "बाईं ओर छोटी संख्या होती है। −3/4 = −0.75, जो −1/2 = −0.5 से छोटा है।"
+    },
+    {
+      "id": "math-topic2-20260611-027",
+      "subject": "गणित शिक्षाशास्त्र",
+      "topic": "बच्चों की गलत अवधारणाएँ",
+      "question": "एक बच्चा कहता है, ‘0 कोई संख्या नहीं है क्योंकि इसका मतलब कुछ नहीं होता।’ शिक्षक की सबसे उपयुक्त प्रतिक्रिया क्या होगी?",
+      "options": [
+        "बच्चे को परिभाषा रटवा देना",
+        "उसे बताना कि उसका उत्तर गलत है और आगे बढ़ जाना",
+        "खाली समूह, संख्या रेखा और स्थानमान में 0 की भूमिका के उदाहरण देना",
+        "0 से जुड़े प्रश्न न पूछना"
+      ],
+      "answer": 2,
+      "explanation": "0 की समझ के लिए ठोस उदाहरण, संख्या रेखा और स्थानमान में उसकी भूमिका दिखाना सबसे उपयोगी है।"
+    },
+    {
+      "id": "math-topic2-20260611-028",
+      "subject": "गणित शिक्षाशास्त्र",
+      "topic": "बच्चों की गलत अवधारणाएँ",
+      "question": "एक विद्यार्थी 1 को अभाज्य संख्या मानता है। इस गलतफहमी को दूर करने के लिए सबसे अच्छा तरीका क्या है?",
+      "options": [
+        "उसे केवल नियम लिखवाना कि 1 अभाज्य नहीं है",
+        "अलग-अलग संख्याओं के गुणनखंड लिखवाकर ‘ठीक दो गुणनखंड’ की शर्त पर चर्चा कराना",
+        "सभी अभाज्य संख्याएँ याद कराना",
+        "अभाज्य संख्या वाला अध्याय छोड़ देना"
+      ],
+      "answer": 1,
+      "explanation": "जब बच्चा 1, 2, 3, 4 आदि के गुणनखंड देखता है, तो ‘ठीक दो गुणनखंड’ की अवधारणा स्पष्ट होती है।"
+    },
+    {
+      "id": "math-topic2-20260611-029",
+      "subject": "गणित शिक्षाशास्त्र",
+      "topic": "संख्या पद्धति शिक्षण",
+      "question": "ल.स. और म.स. की अवधारणा शुरू करने के लिए प्राथमिक/उच्च-प्राथमिक स्तर पर कौन-सी गतिविधि सबसे उपयुक्त है?",
+      "options": [
+        "सीधे सूत्र याद कराना",
+        "सिर्फ लंबी सूची से उत्तर नकल कराना",
+        "समान आकार के समूह बनाना और दोहराते गुणजों को संख्या रेखा पर चिह्नित कराना",
+        "बिना संदर्भ के कठिन बीजगणितीय प्रश्न देना"
+      ],
+      "answer": 2,
+      "explanation": "समूह बनाने और संख्या रेखा पर गुणज देखने से म.स. और ल.स. के अर्थ अनुभव से बनते हैं।"
+    },
+    {
+      "id": "math-topic2-20260611-030",
+      "subject": "गणित शिक्षाशास्त्र",
+      "topic": "बच्चों की गलत अवधारणाएँ",
+      "question": "एक बच्चा 204 को 24 पढ़ता है। यह मुख्यतः किस गलत अवधारणा को दर्शाता है और शिक्षक को क्या करना चाहिए?",
+      "options": [
+        "भिन्न की गलती; भिन्न-पट्टी का प्रयोग करना चाहिए",
+        "शून्य के स्थानमान की कमजोरी; दहाई-इकाई-सैकड़ा ब्लॉक से संख्या बनवानी चाहिए",
+        "गुणा तालिका की कमी; तालिका रटवानी चाहिए",
+        "आकृति-पहचान की समस्या; केवल चित्र बनवाने चाहिए"
+      ],
+      "answer": 1,
+      "explanation": "204 में 0 दहाई के खाली स्थान को दिखाता है। बेस-टेन ब्लॉक/अबेकस से स्थानमान स्पष्ट किया जा सकता है।"
+    }
+  ]
+}</script>
+  <script>
+    const SETS_KEY = "uptet_quiz_player_sets_v1";
+    const CURRENT_KEY = "uptet_quiz_player_current_v1";
+    const SESSION_KEY = "uptet_quiz_player_session_v1";
+    const DEFAULT_SET = JSON.parse(document.getElementById("default-set").textContent);
+
+    const state = {
+      view: "home",
+      sets: [],
+      selectedSetId: null,
+      activeSet: null,
+      answers: [],
+      index: 0,
+      remaining: 0,
+      started: false,
+      paused: false,
+      finished: false,
+      confirmAction: null,
+      importText: "",
+      importError: "",
+      lastMessage: "",
+      timerId: null,
+      reviewFilter: "wrong"
+    };
+
+    function uid() { return "quiz-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8); }
+    function esc(s) { return String(s ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[c])); }
+    function normalizeSet(input) {
+      let obj = input;
+      if (Array.isArray(obj)) obj = { title: "नया अभ्यास सेट", durationMinutes: 30, questions: obj };
+      if (!obj || typeof obj !== "object") throw new Error("JSON object या questions array चाहिए।");
+      const questions = obj.questions;
+      if (!Array.isArray(questions) || questions.length === 0) throw new Error("questions array खाली या missing है।");
+      const normalized = questions.map((q, idx) => {
+        if (!q || typeof q !== "object") throw new Error(`प्रश्न ${idx + 1} valid object नहीं है।`);
+        if (!q.question || typeof q.question !== "string") throw new Error(`प्रश्न ${idx + 1} में question text missing है।`);
+        if (!Array.isArray(q.options) || q.options.length < 2) throw new Error(`प्रश्न ${idx + 1} में options missing हैं।`);
+        if (typeof q.answer !== "number" || q.answer < 0 || q.answer >= q.options.length) throw new Error(`प्रश्न ${idx + 1} में answer index गलत है।`);
+        return {
+          id: q.id || `q-${idx + 1}`,
+          subject: q.subject || "गणित",
+          topic: q.topic || "",
+          question: q.question,
+          options: q.options.map(String),
+          answer: q.answer,
+          explanation: q.explanation || ""
+        };
+      });
+      const duration = Number(obj.durationMinutes || obj.duration || 30);
+      return {
+        id: obj.id || uid(),
+        title: obj.title || obj.name || "UPTET/SUPERTET अभ्यास सेट",
+        durationMinutes: Number.isFinite(duration) && duration > 0 ? duration : 30,
+        questions: normalized,
+        createdAt: obj.createdAt || new Date().toISOString()
+      };
+    }
+    function readJson(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } }
+    function saveSets() { localStorage.setItem(SETS_KEY, JSON.stringify(state.sets)); }
+    function saveCurrent() { if (state.selectedSetId) localStorage.setItem(CURRENT_KEY, state.selectedSetId); }
+    function clearSession() { localStorage.removeItem(SESSION_KEY); }
+    function saveSession() {
+      if (!state.activeSet || !state.started) return;
+      localStorage.setItem(SESSION_KEY, JSON.stringify({
+        setId: state.activeSet.id,
+        answers: state.answers,
+        index: state.index,
+        remaining: state.remaining,
+        started: state.started,
+        paused: state.paused,
+        finished: state.finished,
+        savedAt: new Date().toISOString()
+      }));
+    }
+    function init() {
+      state.sets = readJson(SETS_KEY, []);
+      if (!state.sets.length) {
+        state.sets = [normalizeSet(DEFAULT_SET)];
+        saveSets();
+      }
+      const current = localStorage.getItem(CURRENT_KEY);
+      state.selectedSetId = current && state.sets.some(s => s.id === current) ? current : state.sets[0].id;
+      state.importText = JSON.stringify({ title: "नया अभ्यास सेट", durationMinutes: 30, questions: [] }, null, 2);
+      render();
+    }
+    function currentSet() { return state.sets.find(s => s.id === state.selectedSetId) || state.sets[0]; }
+    function formatTime(total) {
+      const t = Math.max(0, Number(total) || 0);
+      const h = Math.floor(t / 3600);
+      const m = Math.floor((t % 3600) / 60);
+      const s = t % 60;
+      return h > 0 ? `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}` : `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+    }
+    function parseImportText(text) {
+      let raw = String(text || "").trim();
+      raw = raw.replace(/^```(?:json|javascript|js)?/i, "").replace(/```$/i, "").trim();
+      try { return JSON.parse(raw); } catch (e) {}
+      const startObj = raw.indexOf("{");
+      const startArr = raw.indexOf("[");
+      const first = startObj === -1 ? startArr : startArr === -1 ? startObj : Math.min(startObj, startArr);
+      if (first >= 0) {
+        const candidate = raw.slice(first).replace(/;\s*$/, "");
+        try { return JSON.parse(candidate); } catch (e) {}
+      }
+      throw new Error("JSON parse नहीं हो पाया। Future में ChatGPT से strict JSON object मांगें।");
+    }
+    function startTimer() {
+      stopTimer();
+      state.timerId = setInterval(() => {
+        if (!state.started || state.finished || state.paused) return;
+        state.remaining -= 1;
+        if (state.remaining <= 0) {
+          state.remaining = 0;
+          state.finished = true;
+          state.view = "result";
+          stopTimer();
+        }
+        saveSession();
+        render();
+      }, 1000);
+    }
+    function stopTimer() { if (state.timerId) { clearInterval(state.timerId); state.timerId = null; } }
+    function startSet(set, resumeSession) {
+      state.activeSet = set;
+      state.answers = resumeSession?.answers || Array(set.questions.length).fill(null);
+      state.index = resumeSession?.index || 0;
+      state.remaining = Number.isFinite(resumeSession?.remaining) ? resumeSession.remaining : set.durationMinutes * 60;
+      state.started = true;
+      state.paused = !!resumeSession?.paused;
+      state.finished = false;
+      state.confirmAction = null;
+      state.view = "exam";
+      state.reviewFilter = "wrong";
+      saveCurrent();
+      saveSession();
+      startTimer();
+      render();
+    }
+    function finishSet() {
+      state.finished = true;
+      state.paused = false;
+      state.view = "result";
+      stopTimer();
+      saveSession();
+      render();
+    }
+    function resetSessionAndStart() {
+      clearSession();
+      startSet(currentSet(), null);
+    }
+    function getResumeSessionFor(setId) {
+      const s = readJson(SESSION_KEY, null);
+      if (s && s.setId === setId && s.started && !s.finished && Array.isArray(s.answers)) return s;
+      return null;
+    }
+    function score() { return state.activeSet.questions.reduce((sum, q, i) => sum + (state.answers[i] === q.answer ? 1 : 0), 0); }
+    function attempted() { return state.answers.filter(a => a !== null).length; }
+
+    window.actions = {
+      selectSet(id) { state.selectedSetId = id; saveCurrent(); render(); },
+      showImport() { state.view = "import"; state.importError = ""; state.lastMessage = ""; render(); },
+      backHome() { state.view = "home"; state.importError = ""; render(); },
+      loadExample() { state.importText = JSON.stringify(DEFAULT_SET, null, 2); render(); },
+      clearImport() { state.importText = ""; render(); },
+      importInput(el) { state.importText = el.value; },
+      saveImport(startNow) {
+        try {
+          const parsed = parseImportText(state.importText);
+          const set = normalizeSet(parsed);
+          const existingIndex = state.sets.findIndex(s => s.title === set.title && s.questions.length === set.questions.length);
+          if (existingIndex >= 0) state.sets.splice(existingIndex, 1);
+          state.sets.unshift(set);
+          state.selectedSetId = set.id;
+          saveSets(); saveCurrent(); clearSession();
+          state.importError = "";
+          state.lastMessage = `सेट सेव हो गया: ${set.title} (${set.questions.length} प्रश्न, ${set.durationMinutes} मिनट)`;
+          if (startNow) startSet(set, null); else { state.view = "home"; render(); }
+        } catch (e) { state.importError = e.message || String(e); render(); }
+      },
+      deleteCurrentSet() {
+        if (state.sets.length <= 1) { state.lastMessage = "कम से कम एक सेट रहना चाहिए।"; render(); return; }
+        const set = currentSet();
+        if (!confirm(`'${set.title}' हटाना है?`)) return;
+        state.sets = state.sets.filter(s => s.id !== set.id);
+        state.selectedSetId = state.sets[0].id;
+        saveSets(); saveCurrent(); clearSession(); render();
+      },
+      start() {
+        const set = currentSet();
+        const resume = getResumeSessionFor(set.id);
+        if (resume) {
+          state.activeSet = set;
+          state.view = "resume";
+          render();
+        } else startSet(set, null);
+      },
+      resume() { startSet(currentSet(), getResumeSessionFor(currentSet().id)); },
+      fresh() { resetSessionAndStart(); },
+      choose(i) { state.answers[state.index] = i; saveSession(); render(); },
+      go(i) { if (state.paused) return; state.index = Math.max(0, Math.min(state.activeSet.questions.length - 1, i)); saveSession(); render(); },
+      clearAnswer() { state.answers[state.index] = null; saveSession(); render(); },
+      requestPause() { state.confirmAction = state.paused ? null : "pause"; if (state.paused) { state.paused = false; startTimer(); saveSession(); } render(); },
+      requestSubmit() { state.confirmAction = "submit"; render(); },
+      cancelConfirm() { state.confirmAction = null; render(); },
+      confirm() {
+        if (state.confirmAction === "pause") { state.paused = true; stopTimer(); saveSession(); }
+        if (state.confirmAction === "submit") { finishSet(); return; }
+        state.confirmAction = null;
+        render();
+      },
+      review(filter) { state.reviewFilter = filter; render(); },
+      homeFromResult() { stopTimer(); state.view = "home"; state.started = false; state.finished = false; state.activeSet = null; clearSession(); render(); }
+    };
+
+    function renderHome() {
+      const set = currentSet();
+      const resume = getResumeSessionFor(set.id);
+      const options = state.sets.map(s => `<option value="${esc(s.id)}" ${s.id === state.selectedSetId ? "selected" : ""}>${esc(s.title)} — ${s.questions.length} प्रश्न / ${s.durationMinutes} मिनट</option>`).join("");
+      return `<main class="wrap">
+        <section class="card">
+          <div class="pad">
+            <h1>UPTET/SUPERTET Quiz Player</h1>
+            <p class="muted">एक बार host करें, फिर हर नए practice set का JSON paste करके Safari/iPad पर solve करें।</p>
+            ${state.lastMessage ? `<div class="notice good">${esc(state.lastMessage)}</div>` : ""}
+            <div class="grid" style="margin-top:16px">
+              <label><b>Practice set चुनें</b><select class="select" onchange="actions.selectSet(this.value)">${options}</select></label>
+              <div class="grid two">
+                <div class="stat"><b>शीर्षक</b><p class="muted" style="margin-bottom:0">${esc(set.title)}</p></div>
+                <div class="stat"><b>पैटर्न</b><p class="muted" style="margin-bottom:0">${set.questions.length} प्रश्न • ${set.durationMinutes} मिनट</p></div>
+              </div>
+              ${resume ? `<div class="notice warn"><b>Resume available:</b> पिछले attempt में ${formatTime(resume.remaining)} समय बचा था।</div>` : ""}
+              <div class="row">
+                <button class="btn primary" onclick="actions.start()">${resume ? "Resume / Start" : "टेस्ट शुरू करें"}</button>
+                <button class="btn blue" onclick="actions.showImport()">नया Question JSON Import करें</button>
+                <button class="btn danger" onclick="actions.deleteCurrentSet()">Current set हटाएँ</button>
+              </div>
+            </div>
+          </div>
+        </section>
+        <div class="footerSpace"></div>
+      </main>`;
+    }
+
+    function renderResume() {
+      const set = currentSet();
+      const s = getResumeSessionFor(set.id);
+      return `<main class="wrap"><section class="card"><div class="pad">
+        <h1>पुराना attempt मिला</h1>
+        <p class="muted">${esc(set.title)}</p>
+        <div class="grid two">
+          <div class="stat"><b>समय शेष</b><p class="mono" style="font-size:24px;margin-bottom:0">${formatTime(s.remaining)}</p></div>
+          <div class="stat"><b>Attempted</b><p style="font-size:24px;margin-bottom:0">${s.answers.filter(a => a !== null).length}/${set.questions.length}</p></div>
+        </div>
+        <div class="row" style="margin-top:18px">
+          <button class="btn good" onclick="actions.resume()">Resume करें</button>
+          <button class="btn primary" onclick="actions.fresh()">Fresh start</button>
+          <button class="btn" onclick="actions.backHome()">Back</button>
+        </div>
+      </div></section></main>`;
+    }
+
+    function renderImport() {
+      return `<main class="wrap"><section class="card"><div class="pad">
+        <h1>Question set import</h1>
+        <p class="muted">ChatGPT से मिला strict JSON यहाँ paste करें। Format: <span class="mono">{ title, durationMinutes, questions }</span></p>
+        ${state.importError ? `<div class="notice danger"><b>Error:</b> ${esc(state.importError)}</div>` : ""}
+        <textarea class="textarea" oninput="actions.importInput(this)" placeholder="यहाँ JSON paste करें...">${esc(state.importText)}</textarea>
+        <div class="row" style="margin-top:14px">
+          <button class="btn primary" onclick="actions.saveImport(true)">Save & Start</button>
+          <button class="btn" onclick="actions.saveImport(false)">Only Save</button>
+          <button class="btn blue" onclick="actions.loadExample()">Current sample load करें</button>
+          <button class="btn warn" onclick="actions.clearImport()">Clear</button>
+          <button class="btn" onclick="actions.backHome()">Back</button>
+        </div>
+        <div class="notice" style="margin-top:14px"><b>Future prompt:</b> “Give only strict JSON for this quiz player: title, durationMinutes, questions array.”</div>
+      </div></section></main>`;
+    }
+
+    function renderExam() {
+      const set = state.activeSet;
+      const q = set.questions[state.index];
+      const opts = q.options.map((o, i) => `<button class="option ${state.answers[state.index] === i ? "selected" : ""}" onclick="actions.choose(${i})"><b>${String.fromCharCode(65+i)}.</b> ${esc(o)}</button>`).join("");
+      const palette = set.questions.map((_, i) => `<button class="palbtn ${i === state.index ? "current" : state.answers[i] !== null ? "done" : ""}" onclick="actions.go(${i})">${i+1}</button>`).join("");
+      return `<main class="wrap">
+        ${state.confirmAction ? renderModal() : ""}
+        <section class="card">
+          <header class="header">
+            <div>
+              <h1>${esc(set.title)}</h1>
+              <p class="mono" style="margin-bottom:0">समय शेष: ${formatTime(state.remaining)} | प्रश्न ${state.index+1}/${set.questions.length} | Attempted ${attempted()} | ${state.paused ? "Paused" : "Running"}</p>
+            </div>
+            <div class="row">
+              <button class="btn ${state.paused ? "good" : "warn"}" onclick="actions.requestPause()">${state.paused ? "Resume" : "Pause"}</button>
+              <button class="btn danger" onclick="actions.requestSubmit()">Submit</button>
+            </div>
+          </header>
+          <div class="examGrid">
+            <section class="pad">
+              ${state.paused ? `<div class="notice warn" style="text-align:center;padding:28px"><h2>Test paused</h2><p>Timer रुक गया है। Resume दबाने पर प्रश्न फिर दिखेगा।</p><button class="btn good" onclick="actions.requestPause()">Resume</button></div>` : `
+                <div class="row" style="justify-content:space-between;margin-bottom:12px">
+                  <span class="pill">${esc(q.subject)}${q.topic ? " • " + esc(q.topic) : ""}</span>
+                </div>
+                <h2>${state.index + 1}. ${esc(q.question)}</h2>
+                <div class="grid">${opts}</div>
+                <div class="nav3">
+                  <button class="btn" onclick="actions.go(${state.index - 1})">पिछला</button>
+                  <button class="btn" onclick="actions.clearAnswer()">साफ करें</button>
+                  <button class="btn primary" onclick="actions.go(${state.index + 1})">अगला</button>
+                </div>`}
+            </section>
+            <aside class="sidebar">
+              <h3>Question palette</h3>
+              <div class="palette">${palette}</div>
+              <p class="small muted" style="margin-top:12px">हरा = attempted, काला = current</p>
+            </aside>
+          </div>
+        </section>
+      </main>`;
+    }
+    function renderModal() {
+      return `<div class="modalBackdrop"><div class="modal">
+        <h2>Confirm</h2>
+        <p>${state.confirmAction === "pause" ? "क्या आप टेस्ट pause करना चाहते हैं? Timer रुक जाएगा और प्रश्न छिप जाएगा।" : "क्या आप टेस्ट submit करना चाहते हैं? Current result दिखेगा और test समाप्त हो जाएगा।"}</p>
+        <div class="grid two"><button class="btn" onclick="actions.cancelConfirm()">Cancel</button><button class="btn primary" onclick="actions.confirm()">Confirm</button></div>
+      </div></div>`;
+    }
+
+    function renderResult() {
+      const set = state.activeSet;
+      const wrong = set.questions.map((q,i)=>({q,i})).filter(x => state.answers[x.i] !== null && state.answers[x.i] !== x.q.answer);
+      const skipped = set.questions.map((q,i)=>({q,i})).filter(x => state.answers[x.i] === null);
+      const correct = set.questions.map((q,i)=>({q,i})).filter(x => state.answers[x.i] === x.q.answer);
+      const chosenList = state.reviewFilter === "wrong" ? wrong : state.reviewFilter === "skipped" ? skipped : correct;
+      const reviewItems = chosenList.length ? chosenList.map(({q,i}) => {
+        const chosen = state.answers[i];
+        return `<article class="reviewItem">
+          <span class="pill">${esc(q.subject)}${q.topic ? " • " + esc(q.topic) : ""}</span>
+          <h3 style="margin-top:10px">${i+1}. ${esc(q.question)}</h3>
+          ${chosen === null ? `<p class="muted"><b>आपका उत्तर:</b> छोड़ा गया</p>` : `<p class="${chosen === q.answer ? "" : ""}" style="color:${chosen === q.answer ? "var(--green)" : "var(--red)"}"><b>आपका उत्तर:</b> ${esc(q.options[chosen])}</p>`}
+          <p style="color:var(--green)"><b>सही उत्तर:</b> ${esc(q.options[q.answer])}</p>
+          <p class="notice"><b>व्याख्या:</b> ${esc(q.explanation)}</p>
+        </article>`;
+      }).join("") : `<div class="notice good">इस section में कोई प्रश्न नहीं है।</div>`;
+      return `<main class="wrap"><section class="card"><div class="pad">
+        <h1>टेस्ट परिणाम</h1>
+        <div class="grid two">
+          <div class="stat"><b>Score</b><p style="font-size:38px;font-weight:900;margin-bottom:0">${score()}/${set.questions.length}</p></div>
+          <div class="stat"><b>Summary</b><p style="margin-bottom:0">Attempted: ${attempted()}<br>Unattempted: ${set.questions.length - attempted()}<br>Wrong: ${wrong.length}</p></div>
+        </div>
+        <div class="row" style="margin-top:18px">
+          <button class="btn ${state.reviewFilter === "wrong" ? "danger" : ""}" onclick="actions.review('wrong')">गलत उत्तर (${wrong.length})</button>
+          <button class="btn ${state.reviewFilter === "skipped" ? "warn" : ""}" onclick="actions.review('skipped')">छोड़े गए (${skipped.length})</button>
+          <button class="btn ${state.reviewFilter === "correct" ? "good" : ""}" onclick="actions.review('correct')">सही (${correct.length})</button>
+          <button class="btn primary" onclick="actions.homeFromResult()">Home</button>
+        </div>
+        <div class="grid" style="margin-top:18px">${reviewItems}</div>
+      </div></section></main>`;
+    }
+
+    function render() {
+      const app = document.getElementById("app");
+      if (state.view === "home") app.innerHTML = renderHome();
+      else if (state.view === "import") app.innerHTML = renderImport();
+      else if (state.view === "resume") app.innerHTML = renderResume();
+      else if (state.view === "exam") app.innerHTML = renderExam();
+      else if (state.view === "result") app.innerHTML = renderResult();
+    }
+
+    document.addEventListener("visibilitychange", () => { if (document.hidden) saveSession(); });
+    init();
+  </script>
+</body>
+</html>
