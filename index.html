@@ -166,6 +166,7 @@
       .palette { grid-template-columns: repeat(5, 1fr); }
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div id="app" class="page"></div>
@@ -601,6 +602,10 @@
     const SESSION_KEY = "uptet_quiz_player_session_v1";
     const RESULTS_KEY = "uptet_quiz_player_results_v1";
     const QBANK_KEY = "uptet_quiz_player_qbank_v1";
+    // Supabase — cloud sync (exams push, attempts pull). publishable key public होना सुरक्षित है; असली सुरक्षा login + RLS से।
+    const SB_URL = "https://bpyrgsjhttcntdywaeps.supabase.co";
+    const SB_KEY = "sb_publishable_YfflYfoB-_ojcTvFrzf3qQ_3K7TOjqe";
+    const sb = (window.supabase && SB_URL) ? window.supabase.createClient(SB_URL, SB_KEY) : null;
     // विषय/topic की मान्य सूची (single source of truth)। नया विषय/topic यहीं जोड़ें, और ChatGPT instructions में भी।
     const TAXONOMY = {
       "CDP": { "name": "बाल विकास एवं शिक्षाशास्त्र", "topics": { "DEV": "बाल विकास", "COG": "संज्ञानात्मक विकास", "SOC": "सामाजिक एवं भावनात्मक विकास", "LRN": "अधिगम", "THY": "अधिगम सिद्धांत", "PIA": "पियाजे", "VYG": "वाइगोत्स्की", "KOH": "कोहलबर्ग", "BRU": "ब्रूनर", "SKN": "स्किनर", "BAN": "बंडूरा", "MOT": "प्रेरणा", "INT": "बुद्धि एवं सृजनशीलता", "DIV": "वैयक्तिक भिन्नताएँ", "INC": "समावेशी शिक्षा", "CWS": "विशेष आवश्यकता वाले बच्चे", "GFT": "प्रतिभाशाली बच्चे", "ASSE": "मूल्यांकन", "CCE": "सतत एवं व्यापक मूल्यांकन", "PED": "बाल-केंद्रित शिक्षाशास्त्र", "MISC": "सामान्य / अन्य" } },
@@ -638,8 +643,51 @@
       reviewFilter: "wrong",
       resultRecorded: false,
       redoTopic: "all",
-      redoLimit: 30
+      redoLimit: 30,
+      user: null,
+      authError: "",
+      authBusy: false,
+      cloudMsg: "",
+      dashboardData: null
     };
+
+    // ---- Supabase sync helpers (सब best-effort; offline पर app local से चलता रहता है) ----
+    async function pullCloudSets() {
+      if (!sb || !state.user) return;
+      try {
+        const { data, error } = await sb.from("exam_sets").select("*").order("created_at", { ascending: false });
+        if (error || !data) return;
+        let added = 0;
+        data.forEach(row => {
+          if (state.sets.some(s => s.cloudId === row.id)) return;
+          try {
+            const set = normalizeSet({ title: row.title, durationMinutes: row.duration_minutes, questions: row.questions });
+            set.cloudId = row.id;
+            state.sets.push(set);
+            added++;
+          } catch (e) { /* invalid cloud set — छोड़ें */ }
+        });
+        if (added) { saveSets(); }
+      } catch (e) { /* network — ignore */ }
+    }
+    async function pushCloudSet(set) {
+      if (!sb || !state.user) return;
+      try {
+        const { data, error } = await sb.from("exam_sets")
+          .insert({ title: set.title, duration_minutes: set.durationMinutes, questions: set.questions })
+          .select().single();
+        if (!error && data) { set.cloudId = data.id; saveSets(); state.cloudMsg = "☁️ Uploaded to cloud — reload on the other device to see it."; render(); }
+      } catch (e) { /* ignore */ }
+    }
+    async function pushCloudAttempt(r) {
+      if (!sb || !state.user) return;
+      try {
+        await sb.from("attempts").insert({
+          set_title: r.title, score: r.score, total: r.total, attempted: r.attempted,
+          per_topic: r.perTopic, taker: state.user.email
+        });
+      } catch (e) { /* ignore */ }
+    }
 
     function uid() { return "quiz-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8); }
     function esc(s) { return String(s ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[c])); }
@@ -656,20 +704,20 @@
     }
     function normalizeSet(input) {
       let obj = input;
-      if (Array.isArray(obj)) obj = { title: "नया अभ्यास सेट", durationMinutes: 30, questions: obj };
-      if (!obj || typeof obj !== "object") throw new Error("JSON object या questions array चाहिए।");
+      if (Array.isArray(obj)) obj = { title: "New practice set", durationMinutes: 30, questions: obj };
+      if (!obj || typeof obj !== "object") throw new Error("Need a JSON object or a questions array.");
       const questions = obj.questions;
-      if (!Array.isArray(questions) || questions.length === 0) throw new Error("questions array खाली या missing है।");
+      if (!Array.isArray(questions) || questions.length === 0) throw new Error("questions array is empty or missing.");
       const normalized = questions.map((q, idx) => {
-        if (!q || typeof q !== "object") throw new Error(`प्रश्न ${idx + 1} valid object नहीं है।`);
-        if (!q.question || typeof q.question !== "string") throw new Error(`प्रश्न ${idx + 1} में question text missing है।`);
-        if (!Array.isArray(q.options) || q.options.length < 2) throw new Error(`प्रश्न ${idx + 1} में options missing हैं।`);
-        if (typeof q.answer !== "number" || q.answer < 0 || q.answer >= q.options.length) throw new Error(`प्रश्न ${idx + 1} में answer index गलत है।`);
-        // strict taxonomy validation — अमान्य subjectId/topicId पर पूरा set reject।
+        if (!q || typeof q !== "object") throw new Error(`Question ${idx + 1} is not a valid object.`);
+        if (!q.question || typeof q.question !== "string") throw new Error(`Question ${idx + 1} is missing question text.`);
+        if (!Array.isArray(q.options) || q.options.length < 2) throw new Error(`Question ${idx + 1} is missing options.`);
+        if (typeof q.answer !== "number" || q.answer < 0 || q.answer >= q.options.length) throw new Error(`Question ${idx + 1} has an invalid answer index.`);
+        // strict taxonomy validation — reject the whole set on an invalid subjectId/topicId.
         const sid = q.subjectId;
-        if (!sid || !TAXONOMY[sid]) throw new Error(`प्रश्न ${idx + 1}: अमान्य subjectId "${sid ?? ""}"। मान्य: ${Object.keys(TAXONOMY).join(", ")}`);
+        if (!sid || !TAXONOMY[sid]) throw new Error(`Question ${idx + 1}: invalid subjectId "${sid ?? ""}". Valid: ${Object.keys(TAXONOMY).join(", ")}`);
         const tid = q.topicId;
-        if (!tid || !TAXONOMY[sid].topics[tid]) throw new Error(`प्रश्न ${idx + 1}: "${sid}" के अंदर अमान्य topicId "${tid ?? ""}"। मान्य: ${Object.keys(TAXONOMY[sid].topics).join(", ")}`);
+        if (!tid || !TAXONOMY[sid].topics[tid]) throw new Error(`Question ${idx + 1}: invalid topicId "${tid ?? ""}" under "${sid}". Valid: ${Object.keys(TAXONOMY[sid].topics).join(", ")}`);
         return {
           id: q.id || `q-${idx + 1}`,
           qid: hashQ(q.question, q.options),
@@ -686,7 +734,7 @@
       const duration = Number(obj.durationMinutes || obj.duration || 30);
       return {
         id: obj.id || uid(),
-        title: obj.title || obj.name || "UPTET/SUPERTET अभ्यास सेट",
+        title: obj.title || obj.name || "UPTET/SUPERTET practice set",
         durationMinutes: Number.isFinite(duration) && duration > 0 ? duration : 30,
         questions: normalized,
         createdAt: obj.createdAt || new Date().toISOString()
@@ -745,6 +793,7 @@
           perTopic
         });
         saveResults(results);
+        pushCloudAttempt(results[0]); // cloud पर भेजें ताकि analysis किसी भी device से दिखे (best-effort)
       }
       state.resultRecorded = true;
     }
@@ -783,7 +832,7 @@
     function buildRedoSet(records, label) {
       return {
         id: "redo-" + Date.now().toString(36),
-        title: "🔁 दोहराव: " + label,
+        title: "🔁 Redo: " + label,
         durationMinutes: Math.max(5, records.length),
         isRedo: true,
         questions: records.map((r, idx) => ({
@@ -813,8 +862,22 @@
       }
       const current = localStorage.getItem(CURRENT_KEY);
       state.selectedSetId = current && state.sets.some(s => s.id === current) ? current : state.sets[0].id;
-      state.importText = JSON.stringify({ title: "नया अभ्यास सेट", durationMinutes: 30, questions: [] }, null, 2);
+      state.importText = JSON.stringify({ title: "New practice set", durationMinutes: 30, questions: [] }, null, 2);
       render();
+      bootstrapAuth(); // session restore + cloud pull (async, best-effort)
+    }
+    async function bootstrapAuth() {
+      if (!sb) return; // CDN/Supabase न हो तो app पूरी तरह local चलता है
+      try {
+        const { data } = await sb.auth.getSession();
+        if (data && data.session) {
+          state.user = data.session.user;
+          await pullCloudSets();
+          render();
+        } else if (state.view === "home") {
+          state.view = "login"; render(); // पहली बार — login माँगें
+        }
+      } catch (e) { /* offline — local से चलता रहे */ }
     }
     function currentSet() { return state.sets.find(s => s.id === state.selectedSetId) || state.sets[0]; }
     function formatTime(total) {
@@ -835,7 +898,7 @@
         const candidate = raw.slice(first).replace(/;\s*$/, "");
         try { return JSON.parse(candidate); } catch (e) {}
       }
-      throw new Error("JSON parse नहीं हो पाया। Future में ChatGPT से strict JSON object मांगें।");
+      throw new Error("Could not parse JSON. Ask ChatGPT for a strict JSON object next time.");
     }
     function startTimer() {
       stopTimer();
@@ -909,17 +972,31 @@
           state.selectedSetId = set.id;
           saveSets(); saveCurrent(); clearSession();
           state.importError = "";
-          state.lastMessage = `सेट सेव हो गया: ${set.title} (${set.questions.length} प्रश्न, ${set.durationMinutes} मिनट)`;
+          state.lastMessage = `Set saved: ${set.title} (${set.questions.length} questions, ${set.durationMinutes} min)`;
+          pushCloudSet(set); // cloud पर भेजें ताकि दूसरे device पर भी दिखे (best-effort)
           if (startNow) startSet(set, null); else { state.view = "home"; render(); }
         } catch (e) { state.importError = e.message || String(e); render(); }
       },
-      deleteCurrentSet() {
-        if (state.sets.length <= 1) { state.lastMessage = "कम से कम एक सेट रहना चाहिए।"; render(); return; }
+      async deleteCurrentSet() {
+        if (state.sets.length <= 1) { state.lastMessage = "At least one set must remain."; render(); return; }
         const set = currentSet();
-        if (!confirm(`'${set.title}' हटाना है?`)) return;
+        const synced = set.cloudId && sb && state.user;
+        // confirmation dialog — only this one exam is deleted.
+        const msg = synced
+          ? `Delete '${set.title}'?\n\n⚠️ This also deletes it from the cloud — this one exam will be gone from all devices.`
+          : `Delete '${set.title}'? (this device only)`;
+        if (!confirm(msg)) return;
+        if (synced) {
+          try {
+            const { error } = await sb.from("exam_sets").delete().eq("id", set.cloudId); // only this one row
+            if (error) throw error;
+          } catch (e) { alert("Could not delete from cloud, please try again: " + (e.message || e)); return; }
+        }
         state.sets = state.sets.filter(s => s.id !== set.id);
         state.selectedSetId = state.sets[0].id;
-        saveSets(); saveCurrent(); clearSession(); render();
+        saveSets(); saveCurrent(); clearSession();
+        state.cloudMsg = synced ? "🗑️ Exam deleted from the cloud." : "";
+        render();
       },
       start() {
         const set = currentSet();
@@ -948,21 +1025,48 @@
       homeFromResult() { stopTimer(); state.view = "home"; state.started = false; state.finished = false; state.activeSet = null; clearSession(); render(); },
       showHistory() { state.view = "history"; render(); },
       showRedo() { state.view = "redo"; render(); },
+      async loginFromForm() {
+        const email = (document.getElementById("li-email") || {}).value || "";
+        const pw = (document.getElementById("li-pw") || {}).value || "";
+        if (!email || !pw) { state.authError = "Enter both email and password."; render(); return; }
+        state.authBusy = true; state.authError = ""; render();
+        try {
+          const { data, error } = await sb.auth.signInWithPassword({ email: email.trim(), password: pw });
+          if (error) { state.authError = error.message; state.authBusy = false; render(); return; }
+          state.user = data.user; state.authBusy = false; state.authError = "";
+          await pullCloudSets();
+          state.view = "home"; render();
+        } catch (e) { state.authError = String(e.message || e); state.authBusy = false; render(); }
+      },
+      async logout() {
+        try { if (sb) await sb.auth.signOut(); } catch (e) {}
+        state.user = null; state.view = "login"; render();
+      },
+      skipLogin() { state.view = "home"; render(); },
+      async showDashboard() {
+        state.view = "dashboard"; state.dashboardData = null; render();
+        if (!sb || !state.user) { state.dashboardData = []; render(); return; }
+        try {
+          const { data } = await sb.from("attempts").select("*").order("created_at", { ascending: false });
+          state.dashboardData = data || [];
+        } catch (e) { state.dashboardData = []; }
+        render();
+      },
       redoSetTopic(v) { state.redoTopic = v; render(); },
       redoSetLimit(v) { state.redoLimit = v === "all" ? "all" : Number(v); render(); },
       redoSolveAll() {
         const recs = getFilteredMistakes();
-        if (!recs.length) { alert("इस filter में कोई प्रश्न नहीं है।"); return; }
-        const label = state.redoTopic === "all" ? `${recs.length} गलत प्रश्न` : recs[0]._label;
+        if (!recs.length) { alert("No questions in this filter."); return; }
+        const label = state.redoTopic === "all" ? `${recs.length} wrong questions` : recs[0]._label;
         startSet(buildRedoSet(recs, label), null);
       },
       redoSolveOne(qid) {
         const rec = loadBank()[qid];
-        if (!rec) { alert("प्रश्न नहीं मिला।"); return; }
-        startSet(buildRedoSet([rec], "एक प्रश्न"), null);
+        if (!rec) { alert("Question not found."); return; }
+        startSet(buildRedoSet([rec], "one question"), null);
       },
       clearHistory() {
-        if (!confirm("पूरा result history मिटाना है? यह वापस नहीं आएगा।")) return;
+        if (!confirm("Clear the entire result history? This cannot be undone.")) return;
         saveResults([]); render();
       },
       exportHistory() {
@@ -980,26 +1084,32 @@
     function renderHome() {
       const set = currentSet();
       const resume = getResumeSessionFor(set.id);
-      const options = state.sets.map(s => `<option value="${esc(s.id)}" ${s.id === state.selectedSetId ? "selected" : ""}>${esc(s.title)} — ${s.questions.length} प्रश्न / ${s.durationMinutes} मिनट</option>`).join("");
+      const options = state.sets.map(s => `<option value="${esc(s.id)}" ${s.id === state.selectedSetId ? "selected" : ""}>${esc(s.title)} — ${s.questions.length} questions / ${s.durationMinutes} min</option>`).join("");
       return `<main class="wrap">
         <section class="card">
           <div class="pad">
             <h1>UPTET/SUPERTET Quiz Player</h1>
-            <p class="muted">एक बार host करें, फिर हर नए practice set का JSON paste करके Safari/iPad पर solve करें।</p>
+            <p class="muted">Host once, then paste each new practice set's JSON and solve it on Safari/iPad.</p>
+            ${sb ? `<div class="row small muted" style="justify-content:space-between;align-items:center">
+              <span>${state.user ? "☁️ Synced: " + esc(state.user.email) : "⚠️ Offline (not logged in)"}</span>
+              ${state.user ? `<button class="btn" style="padding:6px 12px" onclick="actions.logout()">Logout</button>` : ""}
+            </div>` : ""}
+            ${state.cloudMsg ? `<div class="notice good">${esc(state.cloudMsg)}</div>` : ""}
             ${state.lastMessage ? `<div class="notice good">${esc(state.lastMessage)}</div>` : ""}
             <div class="grid" style="margin-top:16px">
-              <label><b>Practice set चुनें</b><select class="select" onchange="actions.selectSet(this.value)">${options}</select></label>
+              <label><b>Choose practice set</b><select class="select" onchange="actions.selectSet(this.value)">${options}</select></label>
               <div class="grid two">
-                <div class="stat"><b>शीर्षक</b><p class="muted" style="margin-bottom:0">${esc(set.title)}</p></div>
-                <div class="stat"><b>पैटर्न</b><p class="muted" style="margin-bottom:0">${set.questions.length} प्रश्न • ${set.durationMinutes} मिनट</p></div>
+                <div class="stat"><b>Title</b><p class="muted" style="margin-bottom:0">${esc(set.title)}</p></div>
+                <div class="stat"><b>Pattern</b><p class="muted" style="margin-bottom:0">${set.questions.length} questions • ${set.durationMinutes} min</p></div>
               </div>
-              ${resume ? `<div class="notice warn"><b>Resume available:</b> पिछले attempt में ${formatTime(resume.remaining)} समय बचा था।</div>` : ""}
+              ${resume ? `<div class="notice warn"><b>Resume available:</b> ${formatTime(resume.remaining)} was left in your last attempt.</div>` : ""}
               <div class="row">
-                <button class="btn primary" onclick="actions.start()">${resume ? "Resume / Start" : "टेस्ट शुरू करें"}</button>
-                <button class="btn blue" onclick="actions.showImport()">नया Question JSON Import करें</button>
-                <button class="btn" onclick="actions.showHistory()">📊 History और विश्लेषण</button>
-                <button class="btn warn" onclick="actions.showRedo()">🔁 गलत प्रश्न दोहराएँ</button>
-                <button class="btn danger" onclick="actions.deleteCurrentSet()">Current set हटाएँ</button>
+                <button class="btn primary" onclick="actions.start()">${resume ? "Resume / Start" : "Start test"}</button>
+                <button class="btn blue" onclick="actions.showImport()">Import new question JSON</button>
+                <button class="btn" onclick="actions.showHistory()">📊 History &amp; analysis</button>
+                <button class="btn warn" onclick="actions.showRedo()">🔁 Redo wrong questions</button>
+                ${sb && state.user ? `<button class="btn blue" onclick="actions.showDashboard()">🌐 Cloud dashboard (all devices)</button>` : ""}
+                <button class="btn danger" onclick="actions.deleteCurrentSet()">Delete current set</button>
               </div>
             </div>
           </div>
@@ -1012,14 +1122,14 @@
       const set = currentSet();
       const s = getResumeSessionFor(set.id);
       return `<main class="wrap"><section class="card"><div class="pad">
-        <h1>पुराना attempt मिला</h1>
+        <h1>Previous attempt found</h1>
         <p class="muted">${esc(set.title)}</p>
         <div class="grid two">
-          <div class="stat"><b>समय शेष</b><p class="mono" style="font-size:24px;margin-bottom:0">${formatTime(s.remaining)}</p></div>
+          <div class="stat"><b>Time left</b><p class="mono" style="font-size:24px;margin-bottom:0">${formatTime(s.remaining)}</p></div>
           <div class="stat"><b>Attempted</b><p style="font-size:24px;margin-bottom:0">${s.answers.filter(a => a !== null).length}/${set.questions.length}</p></div>
         </div>
         <div class="row" style="margin-top:18px">
-          <button class="btn good" onclick="actions.resume()">Resume करें</button>
+          <button class="btn good" onclick="actions.resume()">Resume</button>
           <button class="btn primary" onclick="actions.fresh()">Fresh start</button>
           <button class="btn" onclick="actions.backHome()">Back</button>
         </div>
@@ -1029,14 +1139,14 @@
     function renderImport() {
       return `<main class="wrap"><section class="card"><div class="pad">
         <h1>Question set import</h1>
-        <p class="muted">ChatGPT से मिला strict JSON यहाँ paste करें। Format: <span class="mono">{ title, durationMinutes, questions:[{ subjectId, topicId, question, options, answer, explanation }] }</span></p>
-        <p class="small muted">💡 हर प्रश्न में मान्य <span class="mono">subjectId</span> और <span class="mono">topicId</span> (taxonomy से) ज़रूरी हैं — गलत code पर पूरा set reject हो जाएगा।</p>
+        <p class="muted">Paste the strict JSON from ChatGPT here. Format: <span class="mono">{ title, durationMinutes, questions:[{ subjectId, topicId, question, options, answer, explanation }] }</span></p>
+        <p class="small muted">💡 Each question needs a valid <span class="mono">subjectId</span> and <span class="mono">topicId</span> (from the taxonomy) — an invalid code rejects the whole set.</p>
         ${state.importError ? `<div class="notice danger"><b>Error:</b> ${esc(state.importError)}</div>` : ""}
-        <textarea class="textarea" oninput="actions.importInput(this)" placeholder="यहाँ JSON paste करें...">${esc(state.importText)}</textarea>
+        <textarea class="textarea" oninput="actions.importInput(this)" placeholder="Paste JSON here...">${esc(state.importText)}</textarea>
         <div class="row" style="margin-top:14px">
-          <button class="btn primary" onclick="actions.saveImport(true)">Save & Start</button>
+          <button class="btn primary" onclick="actions.saveImport(true)">Save &amp; Start</button>
           <button class="btn" onclick="actions.saveImport(false)">Only Save</button>
-          <button class="btn blue" onclick="actions.loadExample()">Current sample load करें</button>
+          <button class="btn blue" onclick="actions.loadExample()">Load current sample</button>
           <button class="btn warn" onclick="actions.clearImport()">Clear</button>
           <button class="btn" onclick="actions.backHome()">Back</button>
         </div>
@@ -1055,7 +1165,7 @@
           <header class="header">
             <div>
               <h1>${esc(set.title)}</h1>
-              <p class="mono" style="margin-bottom:0">समय शेष: ${formatTime(state.remaining)} | प्रश्न ${state.index+1}/${set.questions.length} | Attempted ${attempted()} | ${state.paused ? "Paused" : "Running"}</p>
+              <p class="mono" style="margin-bottom:0">Time left: ${formatTime(state.remaining)} | Q ${state.index+1}/${set.questions.length} | Attempted ${attempted()} | ${state.paused ? "Paused" : "Running"}</p>
             </div>
             <div class="row">
               <button class="btn ${state.paused ? "good" : "warn"}" onclick="actions.requestPause()">${state.paused ? "Resume" : "Pause"}</button>
@@ -1064,22 +1174,22 @@
           </header>
           <div class="examGrid">
             <section class="pad">
-              ${state.paused ? `<div class="notice warn" style="text-align:center;padding:28px"><h2>Test paused</h2><p>Timer रुक गया है। Resume दबाने पर प्रश्न फिर दिखेगा।</p><button class="btn good" onclick="actions.requestPause()">Resume</button></div>` : `
+              ${state.paused ? `<div class="notice warn" style="text-align:center;padding:28px"><h2>Test paused</h2><p>The timer is stopped. Press Resume to show the question again.</p><button class="btn good" onclick="actions.requestPause()">Resume</button></div>` : `
                 <div class="row" style="justify-content:space-between;margin-bottom:12px">
                   <span class="pill">${esc(q.subject)}${q.topic ? " • " + esc(q.topic) : ""}</span>
                 </div>
                 <h2>${state.index + 1}. ${esc(q.question)}</h2>
                 <div class="grid">${opts}</div>
                 <div class="nav3">
-                  <button class="btn" onclick="actions.go(${state.index - 1})">पिछला</button>
-                  <button class="btn" onclick="actions.clearAnswer()">साफ करें</button>
-                  <button class="btn primary" onclick="actions.go(${state.index + 1})">अगला</button>
+                  <button class="btn" onclick="actions.go(${state.index - 1})">Previous</button>
+                  <button class="btn" onclick="actions.clearAnswer()">Clear</button>
+                  <button class="btn primary" onclick="actions.go(${state.index + 1})">Next</button>
                 </div>`}
             </section>
             <aside class="sidebar">
               <h3>Question palette</h3>
               <div class="palette">${palette}</div>
-              <p class="small muted" style="margin-top:12px">हरा = attempted, काला = current</p>
+              <p class="small muted" style="margin-top:12px">Green = attempted, black = current</p>
             </aside>
           </div>
         </section>
@@ -1088,7 +1198,7 @@
     function renderModal() {
       return `<div class="modalBackdrop"><div class="modal">
         <h2>Confirm</h2>
-        <p>${state.confirmAction === "pause" ? "क्या आप टेस्ट pause करना चाहते हैं? Timer रुक जाएगा और प्रश्न छिप जाएगा।" : "क्या आप टेस्ट submit करना चाहते हैं? Current result दिखेगा और test समाप्त हो जाएगा।"}</p>
+        <p>${state.confirmAction === "pause" ? "Pause the test? The timer stops and the question is hidden." : "Submit the test? Your current result is shown and the test ends."}</p>
         <div class="grid two"><button class="btn" onclick="actions.cancelConfirm()">Cancel</button><button class="btn primary" onclick="actions.confirm()">Confirm</button></div>
       </div></div>`;
     }
@@ -1104,23 +1214,23 @@
         return `<article class="reviewItem">
           <span class="pill">${esc(q.subject)}${q.topic ? " • " + esc(q.topic) : ""}</span>
           <h3 style="margin-top:10px">${i+1}. ${esc(q.question)}</h3>
-          ${chosen === null ? `<p class="muted"><b>आपका उत्तर:</b> छोड़ा गया</p>` : `<p class="${chosen === q.answer ? "" : ""}" style="color:${chosen === q.answer ? "var(--green)" : "var(--red)"}"><b>आपका उत्तर:</b> ${esc(q.options[chosen])}</p>`}
-          <p style="color:var(--green)"><b>सही उत्तर:</b> ${esc(q.options[q.answer])}</p>
-          <p class="notice"><b>व्याख्या:</b> ${esc(q.explanation)}</p>
+          ${chosen === null ? `<p class="muted"><b>Your answer:</b> skipped</p>` : `<p class="${chosen === q.answer ? "" : ""}" style="color:${chosen === q.answer ? "var(--green)" : "var(--red)"}"><b>Your answer:</b> ${esc(q.options[chosen])}</p>`}
+          <p style="color:var(--green)"><b>Correct answer:</b> ${esc(q.options[q.answer])}</p>
+          <p class="notice"><b>Explanation:</b> ${esc(q.explanation)}</p>
         </article>`;
-      }).join("") : `<div class="notice good">इस section में कोई प्रश्न नहीं है।</div>`;
+      }).join("") : `<div class="notice good">No questions in this section.</div>`;
       return `<main class="wrap"><section class="card"><div class="pad">
-        <h1>टेस्ट परिणाम</h1>
+        <h1>Test result</h1>
         <div class="grid two">
           <div class="stat"><b>Score</b><p style="font-size:38px;font-weight:900;margin-bottom:0">${score()}/${set.questions.length}</p></div>
           <div class="stat"><b>Summary</b><p style="margin-bottom:0">Attempted: ${attempted()}<br>Unattempted: ${set.questions.length - attempted()}<br>Wrong: ${wrong.length}</p></div>
         </div>
         <div class="row" style="margin-top:18px">
-          <button class="btn ${state.reviewFilter === "wrong" ? "danger" : ""}" onclick="actions.review('wrong')">गलत उत्तर (${wrong.length})</button>
-          <button class="btn ${state.reviewFilter === "skipped" ? "warn" : ""}" onclick="actions.review('skipped')">छोड़े गए (${skipped.length})</button>
-          <button class="btn ${state.reviewFilter === "correct" ? "good" : ""}" onclick="actions.review('correct')">सही (${correct.length})</button>
-          <button class="btn blue" onclick="actions.showHistory()">📊 History देखें</button>
-          <button class="btn warn" onclick="actions.showRedo()">🔁 गलत प्रश्न दोहराएँ</button>
+          <button class="btn ${state.reviewFilter === "wrong" ? "danger" : ""}" onclick="actions.review('wrong')">Wrong (${wrong.length})</button>
+          <button class="btn ${state.reviewFilter === "skipped" ? "warn" : ""}" onclick="actions.review('skipped')">Skipped (${skipped.length})</button>
+          <button class="btn ${state.reviewFilter === "correct" ? "good" : ""}" onclick="actions.review('correct')">Correct (${correct.length})</button>
+          <button class="btn blue" onclick="actions.showHistory()">📊 View history</button>
+          <button class="btn warn" onclick="actions.showRedo()">🔁 Redo wrong questions</button>
           <button class="btn primary" onclick="actions.homeFromResult()">Home</button>
         </div>
         <div class="grid" style="margin-top:18px">${reviewItems}</div>
@@ -1131,8 +1241,8 @@
       const results = loadResults();
       if (!results.length) {
         return `<main class="wrap"><section class="card"><div class="pad">
-          <h1>📊 History और विश्लेषण</h1>
-          <div class="notice">अभी कोई पूरा किया हुआ टेस्ट नहीं है। एक टेस्ट submit करें — फिर यहाँ score history और कमज़ोर topics दिखेंगे।</div>
+          <h1>📊 History &amp; analysis</h1>
+          <div class="notice">No completed tests yet. Submit a test and your score history and weak topics will show up here.</div>
           <div class="row" style="margin-top:16px"><button class="btn primary" onclick="actions.backHome()">Home</button></div>
         </div></section></main>`;
       }
@@ -1147,7 +1257,7 @@
         return `<div style="margin-bottom:14px">
           <div class="row" style="justify-content:space-between;margin-bottom:4px">
             <b>${esc(t.label)}</b>
-            <span class="mono" style="color:${accColor(pct)}">${pct}% • ${t.correct}/${t.attempted} सही</span>
+            <span class="mono" style="color:${accColor(pct)}">${pct}% • ${t.correct}/${t.attempted} correct</span>
           </div>
           <div style="height:10px;border-radius:6px;background:var(--line);overflow:hidden">
             <div style="height:100%;width:${pct}%;background:${accColor(pct)}"></div>
@@ -1168,17 +1278,17 @@
         </div>`;
       }).join("");
       return `<main class="wrap"><section class="card"><div class="pad">
-        <h1>📊 History और विश्लेषण</h1>
-        <p class="muted">${results.length} टेस्ट पूरे हुए। नीचे हर topic की accuracy — कमज़ोर सबसे ऊपर।</p>
-        ${weakest ? `<div class="notice warn"><b>सबसे कमज़ोर:</b> ${weakest} — इन पर ज़्यादा अभ्यास करें।</div>` : ""}
-        <h3 style="margin-top:18px">Topic-wise कमज़ोरी</h3>
+        <h1>📊 History &amp; analysis</h1>
+        <p class="muted">${results.length} tests completed. Accuracy per topic below — weakest first.</p>
+        ${weakest ? `<div class="notice warn"><b>Weakest:</b> ${weakest} — practice these more.</div>` : ""}
+        <h3 style="margin-top:18px">Topic-wise weakness</h3>
         ${topicRows}
-        <h3 style="margin-top:18px">पिछले attempts</h3>
+        <h3 style="margin-top:18px">Past attempts</h3>
         ${attemptRows}
         <div class="row" style="margin-top:18px">
           <button class="btn primary" onclick="actions.backHome()">Home</button>
-          <button class="btn blue" onclick="actions.exportHistory()">History export (backup)</button>
-          <button class="btn danger" onclick="actions.clearHistory()">History मिटाएँ</button>
+          <button class="btn blue" onclick="actions.exportHistory()">Export history (backup)</button>
+          <button class="btn danger" onclick="actions.clearHistory()">Clear history</button>
         </div>
       </div></section></main>`;
     }
@@ -1187,15 +1297,15 @@
       const all = getMistakeRecords();
       if (!all.length) {
         return `<main class="wrap"><section class="card"><div class="pad">
-          <h1>🔁 Redo deck (गलत प्रश्न)</h1>
-          <div class="notice good">अभी कोई गलत प्रश्न नहीं है — शानदार! कोई test हल करें, गलत प्रश्न अपने-आप यहाँ जुड़ेंगे।</div>
+          <h1>🔁 Redo deck (wrong questions)</h1>
+          <div class="notice good">No wrong questions yet — great! Take a test and wrong questions will be added here automatically.</div>
           <div class="row" style="margin-top:16px"><button class="btn primary" onclick="actions.backHome()">Home</button></div>
         </div></section></main>`;
       }
-      // topic dropdown — bank में मौजूद normalized topics।
+      // topic dropdown — normalized topics present in the bank.
       const topicMap = {};
       all.forEach(r => { topicMap[r._key] = r._label; });
-      const topicOpts = `<option value="all" ${state.redoTopic === "all" ? "selected" : ""}>सभी topics (${all.length})</option>` +
+      const topicOpts = `<option value="all" ${state.redoTopic === "all" ? "selected" : ""}>All topics (${all.length})</option>` +
         Object.entries(topicMap).map(([k, label]) => {
           const n = all.filter(r => r._key === k).length;
           return `<option value="${esc(k)}" ${state.redoTopic === k ? "selected" : ""}>${esc(label)} (${n})</option>`;
@@ -1210,30 +1320,100 @@
         return `<article class="reviewItem">
           <div class="row" style="justify-content:space-between;gap:8px">
             <span class="pill">${esc(r._label)}</span>
-            <span class="mono small" style="color:${resolved ? "var(--green)" : "var(--red)"}">${resolved ? "✓ अब सही" : "✗ अभी भी गलत"} • ${r._wrongCount}× गलत • ${when}</span>
+            <span class="mono small" style="color:${resolved ? "var(--green)" : "var(--red)"}">${resolved ? "✓ now correct" : "✗ still wrong"} • wrong ${r._wrongCount}× • ${when}</span>
           </div>
           <p style="margin:10px 0 8px">${esc(qtext)}</p>
-          <button class="btn primary" onclick="actions.redoSolveOne('${esc(r.qid)}')">यह प्रश्न हल करें</button>
+          <button class="btn primary" onclick="actions.redoSolveOne('${esc(r.qid)}')">Solve this question</button>
         </article>`;
       }).join("");
       return `<main class="wrap"><section class="card"><div class="pad">
-        <h1>🔁 Redo deck (गलत प्रश्न)</h1>
-        <p class="muted">गलत हुए प्रश्न — नया पहले। पूरे batch को हल करें या list से कोई एक चुनें। सही होने पर status हरा हो जाएगा।</p>
+        <h1>🔁 Redo deck (wrong questions)</h1>
+        <p class="muted">Wrong questions — newest first. Solve the whole batch or pick one from the list. Status turns green once you get it right.</p>
         <div class="grid" style="margin-top:8px">
-          <label><b>Topic चुनें</b><select class="select" onchange="actions.redoSetTopic(this.value)">${topicOpts}</select></label>
-          <div class="row">${limitBtn(15, "Recent 15")}${limitBtn(30, "Recent 30")}${limitBtn("all", "सभी")}</div>
+          <label><b>Choose topic</b><select class="select" onchange="actions.redoSetTopic(this.value)">${topicOpts}</select></label>
+          <div class="row">${limitBtn(15, "Recent 15")}${limitBtn(30, "Recent 30")}${limitBtn("all", "All")}</div>
         </div>
         <div class="row" style="margin-top:14px">
-          <button class="btn good" onclick="actions.redoSolveAll()">इन ${recs.length} को एक साथ हल करें</button>
+          <button class="btn good" onclick="actions.redoSolveAll()">Solve these ${recs.length} together</button>
           <button class="btn" onclick="actions.backHome()">Home</button>
         </div>
         <div class="grid" style="margin-top:18px">${rows}</div>
       </div></section></main>`;
     }
 
+    function renderLogin() {
+      return `<main class="wrap"><section class="card"><div class="pad">
+        <h1>Login</h1>
+        <p class="muted">Log in once for cloud sync. After that this device stays logged in.</p>
+        ${state.authError ? `<div class="notice danger"><b>Error:</b> ${esc(state.authError)}</div>` : ""}
+        <div class="grid" style="margin-top:8px">
+          <label><b>Email</b><input id="li-email" class="select" type="email" autocomplete="username" placeholder="email" value="${esc((document.getElementById('li-email')||{}).value||'')}"></label>
+          <label><b>Password</b><input id="li-pw" class="select" type="password" autocomplete="current-password" placeholder="password"></label>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn primary" onclick="actions.loginFromForm()" ${state.authBusy ? "disabled" : ""}>${state.authBusy ? "Logging in…" : "Login"}</button>
+          <button class="btn" onclick="actions.skipLogin()">Use offline for now</button>
+        </div>
+      </div></section></main>`;
+    }
+
+    function renderDashboard() {
+      const rows = state.dashboardData;
+      if (rows === null) {
+        return `<main class="wrap"><section class="card"><div class="pad"><h1>🌐 Cloud dashboard</h1><p class="muted">Loading…</p></div></section></main>`;
+      }
+      if (!rows.length) {
+        return `<main class="wrap"><section class="card"><div class="pad">
+          <h1>🌐 Cloud dashboard</h1>
+          <div class="notice">No attempts in the cloud yet. As soon as a test is submitted on any device, it will show here.</div>
+          <div class="row" style="margin-top:16px"><button class="btn primary" onclick="actions.backHome()">Home</button></div>
+        </div></section></main>`;
+      }
+      const accColor = pct => pct < 50 ? "var(--red)" : pct < 75 ? "var(--amber)" : "var(--green)";
+      // cloud attempts → per_topic aggregate (सभी devices/takers मिलाकर)
+      const agg = aggregateTopics(rows.map(r => ({ perTopic: r.per_topic || {} })));
+      const topics = Object.entries(agg)
+        .map(([k, v]) => ({ k, acc: v.attempted ? v.correct / v.attempted : 0, ...v }))
+        .filter(t => t.attempted > 0).sort((a, b) => a.acc - b.acc);
+      const topicRows = topics.map(t => {
+        const pct = Math.round(t.acc * 100);
+        return `<div style="margin-bottom:14px">
+          <div class="row" style="justify-content:space-between;margin-bottom:4px"><b>${esc(t.label)}</b>
+            <span class="mono" style="color:${accColor(pct)}">${pct}% • ${t.correct}/${t.attempted}</span></div>
+          <div style="height:10px;border-radius:6px;background:var(--line);overflow:hidden"><div style="height:100%;width:${pct}%;background:${accColor(pct)}"></div></div>
+        </div>`;
+      }).join("");
+      const weakest = topics.slice(0, 3).map(t => esc(t.label)).join(", ");
+      const attemptRows = rows.map(r => {
+        const pct = r.total ? Math.round((r.score / r.total) * 100) : 0;
+        const d = new Date(r.created_at);
+        const when = `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+        return `<div class="stat" style="margin-bottom:10px">
+          <div class="row" style="justify-content:space-between"><b>${esc(r.set_title || "Test")}</b>
+            <span class="mono" style="color:${accColor(pct)}">${r.score}/${r.total} (${pct}%)</span></div>
+          <p class="muted small" style="margin-bottom:0">${esc(r.taker || "?")} • ${when} • Attempted ${r.attempted}/${r.total}</p>
+        </div>`;
+      }).join("");
+      return `<main class="wrap"><section class="card"><div class="pad">
+        <h1>🌐 Cloud dashboard</h1>
+        <p class="muted">${rows.length} attempts from all devices — accuracy per topic, weakest first.</p>
+        ${weakest ? `<div class="notice warn"><b>Weakest:</b> ${weakest}</div>` : ""}
+        <h3 style="margin-top:18px">Topic-wise weakness</h3>
+        ${topicRows}
+        <h3 style="margin-top:18px">All attempts (cloud)</h3>
+        ${attemptRows}
+        <div class="row" style="margin-top:18px">
+          <button class="btn primary" onclick="actions.backHome()">Home</button>
+          <button class="btn blue" onclick="actions.showDashboard()">Refresh</button>
+        </div>
+      </div></section></main>`;
+    }
+
     function render() {
       const app = document.getElementById("app");
-      if (state.view === "home") app.innerHTML = renderHome();
+      if (state.view === "login") app.innerHTML = renderLogin();
+      else if (state.view === "dashboard") app.innerHTML = renderDashboard();
+      else if (state.view === "home") app.innerHTML = renderHome();
       else if (state.view === "history") app.innerHTML = renderHistory();
       else if (state.view === "redo") app.innerHTML = renderRedo();
       else if (state.view === "import") app.innerHTML = renderImport();
