@@ -599,7 +599,7 @@
   <script>
     const SETS_KEY = "uptet_quiz_player_sets_v1";
     const CURRENT_KEY = "uptet_quiz_player_current_v1";
-    const SESSION_KEY = "uptet_quiz_player_session_v1";
+    const SESSION_KEY = "uptet_quiz_player_sessions_v2"; // अब per-set map: { [setId]: session }
     const RESULTS_KEY = "uptet_quiz_player_results_v1";
     const QBANK_KEY = "uptet_quiz_player_qbank_v1";
     // Supabase — cloud sync (exams push, attempts pull). publishable key public होना सुरक्षित है; असली सुरक्षा login + RLS से।
@@ -743,7 +743,15 @@
     function readJson(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } }
     function saveSets() { localStorage.setItem(SETS_KEY, JSON.stringify(state.sets)); }
     function saveCurrent() { if (state.selectedSetId) localStorage.setItem(CURRENT_KEY, state.selectedSetId); }
-    function clearSession() { localStorage.removeItem(SESSION_KEY); }
+    function readSessions() { return readJson(SESSION_KEY, {}); }
+    function writeSessions(m) { localStorage.setItem(SESSION_KEY, JSON.stringify(m)); }
+    // किसी एक set की session हटाएँ (default: active set) — बाकी exams की resume बची रहती है।
+    function clearSession(setId) {
+      const id = setId || (state.activeSet && state.activeSet.id);
+      if (!id) return;
+      const m = readSessions();
+      if (id in m) { delete m[id]; writeSessions(m); }
+    }
     function loadResults() { return readJson(RESULTS_KEY, []); }
     function saveResults(arr) { localStorage.setItem(RESULTS_KEY, JSON.stringify(arr)); }
     function loadBank() { return readJson(QBANK_KEY, {}); }
@@ -843,7 +851,8 @@
     }
     function saveSession() {
       if (!state.activeSet || !state.started) return;
-      localStorage.setItem(SESSION_KEY, JSON.stringify({
+      const m = readSessions();
+      m[state.activeSet.id] = {
         setId: state.activeSet.id,
         answers: state.answers,
         index: state.index,
@@ -852,7 +861,8 @@
         paused: state.paused,
         finished: state.finished,
         savedAt: new Date().toISOString()
-      }));
+      };
+      writeSessions(m);
     }
     function init() {
       state.sets = readJson(SETS_KEY, []);
@@ -944,11 +954,12 @@
       render();
     }
     function resetSessionAndStart() {
-      clearSession();
-      startSet(currentSet(), null);
+      const set = currentSet();
+      clearSession(set.id);
+      startSet(set, null);
     }
     function getResumeSessionFor(setId) {
-      const s = readJson(SESSION_KEY, null);
+      const s = readSessions()[setId];
       if (s && s.setId === setId && s.started && !s.finished && Array.isArray(s.answers)) return s;
       return null;
     }
@@ -967,10 +978,10 @@
           const parsed = parseImportText(state.importText);
           const set = normalizeSet(parsed);
           const existingIndex = state.sets.findIndex(s => s.title === set.title && s.questions.length === set.questions.length);
-          if (existingIndex >= 0) state.sets.splice(existingIndex, 1);
+          if (existingIndex >= 0) { clearSession(state.sets[existingIndex].id); state.sets.splice(existingIndex, 1); } // replaced set की orphan session हटाएँ
           state.sets.unshift(set);
           state.selectedSetId = set.id;
-          saveSets(); saveCurrent(); clearSession();
+          saveSets(); saveCurrent();
           state.importError = "";
           state.lastMessage = `Set saved: ${set.title} (${set.questions.length} questions, ${set.durationMinutes} min)`;
           pushCloudSet(set); // cloud पर भेजें ताकि दूसरे device पर भी दिखे (best-effort)
@@ -992,9 +1003,10 @@
             if (error) throw error;
           } catch (e) { alert("Could not delete from cloud, please try again: " + (e.message || e)); return; }
         }
+        clearSession(set.id); // deleted set की session भी हटाएँ
         state.sets = state.sets.filter(s => s.id !== set.id);
         state.selectedSetId = state.sets[0].id;
-        saveSets(); saveCurrent(); clearSession();
+        saveSets(); saveCurrent();
         state.cloudMsg = synced ? "🗑️ Exam deleted from the cloud." : "";
         render();
       },
@@ -1022,7 +1034,9 @@
         render();
       },
       review(filter) { state.reviewFilter = filter; render(); },
-      homeFromResult() { stopTimer(); state.view = "home"; state.started = false; state.finished = false; state.activeSet = null; clearSession(); render(); },
+      homeFromResult() { stopTimer(); if (state.activeSet) clearSession(state.activeSet.id); state.view = "home"; state.started = false; state.finished = false; state.activeSet = null; render(); },
+      // paused exam से Home — session बची रहती है ताकि बाद में resume हो सके।
+      exitToHome() { saveSession(); stopTimer(); state.view = "home"; state.started = false; state.activeSet = null; render(); },
       showHistory() { state.view = "history"; render(); },
       showRedo() { state.view = "redo"; render(); },
       async loginFromForm() {
@@ -1174,7 +1188,7 @@
           </header>
           <div class="examGrid">
             <section class="pad">
-              ${state.paused ? `<div class="notice warn" style="text-align:center;padding:28px"><h2>Test paused</h2><p>The timer is stopped. Press Resume to show the question again.</p><button class="btn good" onclick="actions.requestPause()">Resume</button></div>` : `
+              ${state.paused ? `<div class="notice warn" style="text-align:center;padding:28px"><h2>Test paused</h2><p>The timer is stopped. Resume to continue, or go Home to switch exams — this attempt stays saved.</p><div class="row" style="justify-content:center"><button class="btn good" onclick="actions.requestPause()">Resume</button><button class="btn" onclick="actions.exitToHome()">Home</button></div></div>` : `
                 <div class="row" style="justify-content:space-between;margin-bottom:12px">
                   <span class="pill">${esc(q.subject)}${q.topic ? " • " + esc(q.topic) : ""}</span>
                 </div>
