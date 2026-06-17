@@ -1600,8 +1600,15 @@
       </div></section></main>`;
     }
 
+    let _lastPushedView = null;
     function render() {
       const app = document.getElementById("app");
+      // keep browser history in sync so the back button works
+      if (state.view !== _lastPushedView) {
+        if (_lastPushedView === null) history.replaceState({ view: state.view }, ""); // initial load — don't add an entry
+        else history.pushState({ view: state.view }, "");
+        _lastPushedView = state.view;
+      }
       if (state.view === "login") app.innerHTML = renderLogin();
       else if (state.view === "dashboard") app.innerHTML = renderDashboard();
       else if (state.view === "home") app.innerHTML = renderHome();
@@ -1613,6 +1620,17 @@
       else if (state.view === "result") app.innerHTML = renderResult();
       else if (state.view === "notes") app.innerHTML = renderNotes();
     }
+
+    window.addEventListener("popstate", e => {
+      const v = (e.state && e.state.view) || "home";
+      // safety: exam/result/resume need active state — fall back to home if missing
+      if ((v === "exam" || v === "result" || v === "resume") && !state.activeSet) {
+        _lastPushedView = "home"; state.view = "home"; render(); return;
+      }
+      _lastPushedView = v; // prevent a redundant pushState inside render()
+      state.view = v;
+      render();
+    });
 
     document.addEventListener("visibilitychange", () => { if (document.hidden) saveSession(); });
     init();
