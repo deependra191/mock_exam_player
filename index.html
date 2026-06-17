@@ -682,10 +682,20 @@
     async function pushCloudAttempt(r) {
       if (!sb || !state.user) return;
       try {
-        await sb.from("attempts").insert({
+        const { data } = await sb.from("attempts").insert({
           set_title: r.title, score: r.score, total: r.total, attempted: r.attempted,
           per_topic: r.perTopic, taker: state.user.email
-        });
+        }).select("id,created_at").single();
+        if (data && data.id) {
+          const results = loadResults();
+          const saved = results.find(x => x.id === r.id);
+          if (saved) {
+            saved.cloudId = data.id;
+            saved.cloudDate = data.created_at;
+            saved.cloudTaker = state.user.email;
+            saveResults(results);
+          }
+        }
       } catch (e) { /* ignore */ }
     }
 
@@ -756,6 +766,80 @@
     function saveResults(arr) { localStorage.setItem(RESULTS_KEY, JSON.stringify(arr)); }
     function loadBank() { return readJson(QBANK_KEY, {}); }
     function saveBank(b) { localStorage.setItem(QBANK_KEY, JSON.stringify(b)); }
+    function stableStringify(value) {
+      if (!value || typeof value !== "object") return JSON.stringify(value ?? null);
+      if (Array.isArray(value)) return "[" + value.map(stableStringify).join(",") + "]";
+      return "{" + Object.keys(value).sort().map(k => JSON.stringify(k) + ":" + stableStringify(value[k])).join(",") + "}";
+    }
+    function normalizeCloudPerTopic(v) {
+      if (!v) return {};
+      if (typeof v === "string") {
+        try { return JSON.parse(v) || {}; } catch { return {}; }
+      }
+      return typeof v === "object" ? v : {};
+    }
+    function cloudAttemptToResult(row) {
+      return {
+        id: "cloud-" + (row.id || uid()),
+        cloudId: row.id || null,
+        cloudDate: row.created_at || null,
+        cloudTaker: row.taker || "",
+        setId: "cloud",
+        title: row.set_title || "Test",
+        date: row.created_at || new Date().toISOString(),
+        total: Number(row.total) || 0,
+        attempted: Number(row.attempted) || 0,
+        score: Number(row.score) || 0,
+        durationMinutes: null,
+        perTopic: normalizeCloudPerTopic(row.per_topic)
+      };
+    }
+    function sameAttempt(a, b) {
+      if (!a || !b) return false;
+      if (a.id && b.id && a.id === b.id) return true;
+      if (a.cloudId && b.cloudId && String(a.cloudId) === String(b.cloudId)) return true;
+      const sameCore = a.title === b.title &&
+        Number(a.score) === Number(b.score) &&
+        Number(a.total) === Number(b.total) &&
+        Number(a.attempted) === Number(b.attempted) &&
+        stableStringify(a.perTopic || {}) === stableStringify(b.perTopic || {});
+      if (!sameCore) return false;
+      const da = Date.parse(a.date || a.cloudDate || "");
+      const db = Date.parse(b.date || b.cloudDate || "");
+      return Number.isFinite(da) && Number.isFinite(db) && Math.abs(da - db) <= 5 * 60 * 1000;
+    }
+    function mergeCloudAttemptRows(rows) {
+      const results = loadResults();
+      let changed = false;
+      (rows || []).forEach(row => {
+        const cloudResult = cloudAttemptToResult(row);
+        const existing = results.find(r => sameAttempt(r, cloudResult));
+        if (existing) {
+          if (!existing.cloudId && cloudResult.cloudId) {
+            existing.cloudId = cloudResult.cloudId;
+            existing.cloudDate = cloudResult.cloudDate;
+            existing.cloudTaker = cloudResult.cloudTaker;
+            changed = true;
+          }
+          return;
+        }
+        results.push(cloudResult);
+        changed = true;
+      });
+      if (changed) {
+        results.sort((a, b) => Date.parse(b.date || b.cloudDate || 0) - Date.parse(a.date || a.cloudDate || 0));
+        saveResults(results);
+      }
+      return changed;
+    }
+    async function pullCloudAttempts() {
+      if (!sb || !state.user) return false;
+      try {
+        const { data, error } = await sb.from("attempts").select("*").order("created_at", { ascending: false });
+        if (error || !data) return false;
+        return mergeCloudAttemptRows(data);
+      } catch (e) { return false; }
+    }
     // हर हल किए प्रश्न का outcome question-bank में रखें (recall/redo के लिए)। qid से dedup होता है।
     function updateQuestionBank(set, answers) {
       const bank = loadBank();
@@ -883,6 +967,7 @@
         if (data && data.session) {
           state.user = data.session.user;
           await pullCloudSets();
+          await pullCloudAttempts();
           render();
         } else if (state.view === "home") {
           state.view = "login"; render(); // पहली बार — login माँगें
@@ -1037,7 +1122,10 @@
       homeFromResult() { stopTimer(); if (state.activeSet) clearSession(state.activeSet.id); state.view = "home"; state.started = false; state.finished = false; state.activeSet = null; render(); },
       // paused exam से Home — session बची रहती है ताकि बाद में resume हो सके।
       exitToHome() { saveSession(); stopTimer(); state.view = "home"; state.started = false; state.activeSet = null; render(); },
-      showHistory() { state.view = "history"; render(); },
+      async showHistory() {
+        state.view = "history"; render();
+        if (await pullCloudAttempts()) render();
+      },
       showRedo() { state.view = "redo"; render(); },
       async loginFromForm() {
         const email = (document.getElementById("li-email") || {}).value || "";
@@ -1049,6 +1137,7 @@
           if (error) { state.authError = error.message; state.authBusy = false; render(); return; }
           state.user = data.user; state.authBusy = false; state.authError = "";
           await pullCloudSets();
+          await pullCloudAttempts();
           state.view = "home"; render();
         } catch (e) { state.authError = String(e.message || e); state.authBusy = false; render(); }
       },
@@ -1063,6 +1152,7 @@
         try {
           const { data } = await sb.from("attempts").select("*").order("created_at", { ascending: false });
           state.dashboardData = data || [];
+          mergeCloudAttemptRows(state.dashboardData);
         } catch (e) { state.dashboardData = []; }
         render();
       },
@@ -1080,7 +1170,10 @@
         startSet(buildRedoSet([rec], "one question"), null);
       },
       clearHistory() {
-        if (!confirm("Clear the entire result history? This cannot be undone.")) return;
+        const msg = state.user
+          ? "Clear cached history on this device? Cloud attempts will remain in the Cloud dashboard and may sync back after login/refresh."
+          : "Clear the entire result history on this device? This cannot be undone.";
+        if (!confirm(msg)) return;
         saveResults([]); render();
       },
       exportHistory() {
@@ -1283,12 +1376,13 @@
         const pct = r.total ? Math.round((r.score / r.total) * 100) : 0;
         const d = new Date(r.date);
         const when = `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+        const taker = r.cloudTaker ? `${esc(r.cloudTaker)} • ` : "";
         return `<div class="stat" style="margin-bottom:10px">
           <div class="row" style="justify-content:space-between">
             <b>${esc(r.title)}</b>
             <span class="mono" style="color:${accColor(pct)}">${r.score}/${r.total} (${pct}%)</span>
           </div>
-          <p class="muted small" style="margin-bottom:0">${when} • Attempted ${r.attempted}/${r.total}</p>
+          <p class="muted small" style="margin-bottom:0">${taker}${when} • Attempted ${r.attempted}/${r.total}</p>
         </div>`;
       }).join("");
       return `<main class="wrap"><section class="card"><div class="pad">
