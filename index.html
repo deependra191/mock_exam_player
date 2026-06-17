@@ -1306,7 +1306,6 @@
       const hasNote = !!getNoteForSet(set.id);
       if (state.notesEditMode) {
         return `<main class="wrap"><section class="card"><div class="pad">
-          <p class="muted" style="margin-bottom:6px">${esc(set.title)}</p>
           <textarea class="textarea" style="min-height:420px;font-family:inherit;font-size:15px;line-height:1.65" oninput="actions.notesInput(this)" placeholder="Write notes in Markdown — # Heading, **bold**, | tables |, - lists…">${esc(state.notesText)}</textarea>
           <div class="row" style="margin-top:14px">
             <button class="btn primary" onclick="actions.saveNote()">Save</button>
@@ -1317,8 +1316,7 @@
       }
       const rendered = (window.marked && state.notesText) ? marked.parse(state.notesText) : esc(state.notesText).replace(/\n/g, "<br>");
       return `<main class="wrap"><section class="card">
-        <div class="header">
-          <p class="muted" style="margin:0">${esc(set.title)}</p>
+        <div class="header" style="justify-content:flex-end">
           <div class="row">
             <button class="btn blue" onclick="actions.editNote()">Edit</button>
             <button class="btn" onclick="actions.backFromNotes()">Back</button>
