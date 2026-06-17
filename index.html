@@ -165,8 +165,27 @@
       .sidebar { border-top: 0; border-left: 1px solid var(--line); }
       .palette { grid-template-columns: repeat(5, 1fr); }
     }
+    .noteRender { line-height: 1.7; font-size: 15px; }
+    .noteRender h1 { font-size: clamp(20px, 4vw, 26px); margin-bottom: 4px; border-bottom: 2px solid var(--line); padding-bottom: 10px; }
+    .noteRender h2 { font-size: 18px; margin-top: 24px; margin-bottom: 6px; }
+    .noteRender h3 { font-size: 16px; margin-top: 18px; margin-bottom: 4px; }
+    .noteRender p { margin: 8px 0; }
+    .noteRender ul, .noteRender ol { padding-left: 22px; margin: 8px 0; }
+    .noteRender li { margin: 4px 0; }
+    .noteRender strong { font-weight: 700; }
+    .noteRender em { font-style: italic; }
+    .noteRender table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+    .noteRender th { background: #f1f5f9; font-weight: 700; text-align: left; padding: 10px 12px; border: 1px solid var(--line); }
+    .noteRender td { padding: 9px 12px; border: 1px solid var(--line); vertical-align: top; }
+    .noteRender tr:nth-child(even) td { background: #f8fafc; }
+    .noteRender blockquote { border-left: 3px solid var(--line); margin: 10px 0; padding: 6px 14px; color: var(--muted); }
+    .noteRender code { background: #f1f5f9; border-radius: 5px; padding: 2px 5px; font-size: 13px; font-family: ui-monospace, monospace; }
+    .noteRender pre { background: #f1f5f9; border-radius: 12px; padding: 14px; overflow-x: auto; }
+    .noteRender pre code { background: none; padding: 0; }
+    .noteRender hr { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
   <div id="app" class="page"></div>
@@ -651,7 +670,8 @@
       authBusy: false,
       cloudMsg: "",
       dashboardData: null,
-      notesText: ""
+      notesText: "",
+      notesEditMode: false
     };
 
     // ---- Supabase sync helpers (सब best-effort; offline पर app local से चलता रहता है) ----
@@ -1158,9 +1178,10 @@
         if (await pullCloudAttempts()) render();
       },
       async showRedo() { state.view = "redo"; render(); if (await pullCloudAttempts()) render(); },
-      showNotes(setId) { state.notesText = getNoteForSet(setId); state.view = "notes"; render(); },
+      showNotes(setId) { state.notesText = getNoteForSet(setId); state.notesEditMode = !state.notesText; state.view = "notes"; render(); },
+      editNote() { state.notesEditMode = true; render(); },
       notesInput(el) { state.notesText = el.value; },
-      saveNote() { saveNoteForSet(state.selectedSetId, state.notesText.trim()); state.view = "home"; render(); },
+      saveNote() { const t = state.notesText.trim(); saveNoteForSet(state.selectedSetId, t); state.notesEditMode = !t; render(); },
       deleteNote() { saveNoteForSet(state.selectedSetId, ""); state.notesText = ""; state.view = "home"; render(); },
       backFromNotes() { state.view = "home"; render(); },
       async loginFromForm() {
@@ -1283,16 +1304,28 @@
     function renderNotes() {
       const set = currentSet();
       const hasNote = !!getNoteForSet(set.id);
-      return `<main class="wrap"><section class="card"><div class="pad">
-        <h1>Notes</h1>
-        <p class="muted">${esc(set.title)}</p>
-        <textarea class="textarea" style="min-height:320px;font-family:inherit;font-size:15px;line-height:1.55" oninput="actions.notesInput(this)" placeholder="Write your notes here…">${esc(state.notesText)}</textarea>
-        <div class="row" style="margin-top:14px">
-          <button class="btn primary" onclick="actions.saveNote()">Save</button>
-          <button class="btn" onclick="actions.backFromNotes()">Back</button>
-          ${hasNote ? `<button class="btn danger" onclick="actions.deleteNote()">Delete note</button>` : ""}
+      if (state.notesEditMode) {
+        return `<main class="wrap"><section class="card"><div class="pad">
+          <p class="muted" style="margin-bottom:6px">${esc(set.title)}</p>
+          <textarea class="textarea" style="min-height:420px;font-family:inherit;font-size:15px;line-height:1.65" oninput="actions.notesInput(this)" placeholder="Write notes in Markdown — # Heading, **bold**, | tables |, - lists…">${esc(state.notesText)}</textarea>
+          <div class="row" style="margin-top:14px">
+            <button class="btn primary" onclick="actions.saveNote()">Save</button>
+            ${hasNote ? `<button class="btn" onclick="actions.showNotes('${esc(set.id)}')">Cancel</button>` : `<button class="btn" onclick="actions.backFromNotes()">Back</button>`}
+            ${hasNote ? `<button class="btn danger" onclick="actions.deleteNote()">Delete note</button>` : ""}
+          </div>
+        </div></section></main>`;
+      }
+      const rendered = (window.marked && state.notesText) ? marked.parse(state.notesText) : esc(state.notesText).replace(/\n/g, "<br>");
+      return `<main class="wrap"><section class="card">
+        <div class="header">
+          <p class="muted" style="margin:0">${esc(set.title)}</p>
+          <div class="row">
+            <button class="btn blue" onclick="actions.editNote()">Edit</button>
+            <button class="btn" onclick="actions.backFromNotes()">Back</button>
+          </div>
         </div>
-      </div></section></main>`;
+        <div class="pad noteRender">${rendered}</div>
+      </section></main>`;
     }
 
     function renderImport() {
