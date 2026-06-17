@@ -59,7 +59,7 @@ entry in the question bank (this powers the cross-set redo deck). It resolves th
 **`TAXONOMY`** (lines 631-645) is the single source of truth for subjects/topics. Subject codes:
 `CDP, HIN, ENG, SKT, URD, MATH, EVS, SCI, SST, GK, REAS, COMP, SUP` — each with its own topic codes.
 
-**localStorage keys** (declared lines 619-625, all prefixed `uptet_quiz_player_`):
+**localStorage keys** (declared near the top of the script, all prefixed `uptet_quiz_player_`):
 
 | Constant | Holds |
 |---|---|
@@ -68,7 +68,6 @@ entry in the question bank (this powers the cross-set redo deck). It resolves th
 | `SESSION_KEY` | per-set in-progress exams (so you can pause/resume each exam independently) |
 | `RESULTS_KEY` | completed attempt history |
 | `QBANK_KEY` | question bank keyed by `qid`, with per-question outcome history (drives redo) |
-| `CLOUD_BANK_KEY` | ids of cloud attempts already merged in (dedup) |
 | `NOTES_KEY` | per-set notes, `{ [setId]: markdownText }` |
 
 ## Feature map (where things live)
@@ -85,12 +84,13 @@ entry in the question bank (this powers the cross-set redo deck). It resolves th
   shows weak topics and past scores.
 - **Notes:** `readNotes`/`saveNoteForSet`/`getNoteForSet` (816-818), keyed by `setId`. `renderNotes()`
   (1313) has an edit/view toggle; view mode renders markdown via `marked.parse` (line 1326).
-- **Cloud sync (Supabase):** config at lines 627-629 (the publishable key is fine to commit — real
-  security is login + Row-Level Security). Helpers: `pullCloudSets` (678), `pushCloudSet` (702),
-  `pushCloudNote` (711), `pushCloudAttempt` (715). Auth is email/password (`signInWithPassword`, 1203).
-  Tables: `exam_sets` (title, duration_minutes, questions, **note**) and `attempts` (score, total,
-  per_topic, outcomes, taker). **All cloud calls are best-effort and fail silently** — never let the UI
-  block on the network.
+- **Cloud sync (Supabase):** config is the `SB_URL`/`SB_KEY` pair near the top of the script (the
+  publishable key is fine to commit — real security is login + Row-Level Security). Auth is
+  email/password (`signInWithPassword`). **All cloud calls are best-effort and fail silently** — never
+  let the UI block on the network; localStorage stays the source of truth. Three tables:
+  - `exam_sets` — title, duration_minutes, questions, **note** (per-set notes). `pushCloudSet`/`pullCloudSets`, `pushCloudNote`.
+  - `attempts` — score, total, attempted, per_topic, taker. One row per finished test (`pushCloudAttempt`); pulled + merged by `pullCloudAttempts`/`mergeCloudAttemptRows` (dedup via `sameAttempt`). This is the **attempt summary only** — it does NOT carry per-question outcomes. Attempts that failed to upload are re-pushed by `resyncPendingAttempts` (auto on login, and via the dashboard **🔁 Resync** button).
+  - `question_banks` — one jsonb `bank` per user (`taker` PK). This is the **single** sync path for the redo deck: `pushCloudBank` uploads the local bank after every finished test (incl. redo); `pullCloudBank` merges all visible bank rows back in (union by `qid`, history deduped by `date|outcome|chosen`). Don't also rebuild the bank from attempt rows — that double-counts.
 
 ## Adding a new question set
 

@@ -621,7 +621,6 @@
     const SESSION_KEY = "uptet_quiz_player_sessions_v2"; // अब per-set map: { [setId]: session }
     const RESULTS_KEY = "uptet_quiz_player_results_v1";
     const QBANK_KEY = "uptet_quiz_player_qbank_v1";
-    const CLOUD_BANK_KEY = "uptet_quiz_player_cloud_bank_v1"; // cloudIds already merged into question bank
     const NOTES_KEY = "uptet_quiz_player_notes_v1";
     // Supabase — cloud sync (exams push, attempts pull). publishable key public होना सुरक्षित है; असली सुरक्षा login + RLS से।
     const SB_URL = "https://bpyrgsjhttcntdywaeps.supabase.co";
@@ -713,26 +712,18 @@
       if (!sb || !state.user || !set.cloudId) return;
       try { await sb.from("exam_sets").update({ note: noteText }).eq("id", set.cloudId); } catch (e) { /* ignore */ }
     }
-    async function pushCloudAttempt(r, outcomes) {
+    async function pushCloudAttempt(r) {
       if (!sb || !state.user) return false;
-      const base = { set_title: r.title, score: r.score, total: r.total, attempted: r.attempted, per_topic: r.perTopic, taker: state.user.email };
-      async function doInsert(payload) {
-        const { data, error } = await sb.from("attempts").insert(payload).select("id,created_at").single();
-        if (error) throw error; // supabase-js returns errors instead of throwing — surface it so the retry below actually runs
-        if (data && data.id) {
-          const results = loadResults();
-          const saved = results.find(x => x.id === r.id);
-          if (saved) { saved.cloudId = data.id; saved.cloudDate = data.created_at; saved.cloudTaker = state.user.email; saveResults(results); }
-          return true;
-        }
-        return false;
-      }
+      // सिर्फ़ attempt summary भेजें — redo question-bank अलग से pushCloudBank() से sync होता है (दोबारा push नहीं)।
       try {
-        return await doInsert({ ...base, outcomes: outcomes || null });
-      } catch (e) {
-        // older DBs may lack the outcomes column — retry without it so the attempt still syncs
-        try { return await doInsert(base); } catch (e2) { return false; }
-      }
+        const payload = { set_title: r.title, score: r.score, total: r.total, attempted: r.attempted, per_topic: r.perTopic, taker: state.user.email };
+        const { data, error } = await sb.from("attempts").insert(payload).select("id,created_at").single();
+        if (error || !data || !data.id) return false;
+        const results = loadResults();
+        const saved = results.find(x => x.id === r.id);
+        if (saved) { saved.cloudId = data.id; saved.cloudDate = data.created_at; saved.cloudTaker = state.user.email; saveResults(results); }
+        return true;
+      } catch (e) { return false; }
     }
 
     function uid() { return "quiz-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8); }
@@ -802,21 +793,6 @@
     function saveResults(arr) { localStorage.setItem(RESULTS_KEY, JSON.stringify(arr)); }
     function loadBank() { return readJson(QBANK_KEY, {}); }
     function saveBank(b) { localStorage.setItem(QBANK_KEY, JSON.stringify(b)); }
-    function getProcessedCloudIds() { return new Set(readJson(CLOUD_BANK_KEY, [])); }
-    function markCloudIdProcessed(id) { const s = getProcessedCloudIds(); s.add(String(id)); localStorage.setItem(CLOUD_BANK_KEY, JSON.stringify([...s])); }
-    function updateQBankFromOutcomes(outcomes, date) {
-      if (!Array.isArray(outcomes) || !outcomes.length) return;
-      const bank = loadBank();
-      const ts = date || new Date().toISOString();
-      outcomes.forEach(o => {
-        if (!o.qid) return;
-        const rec = bank[o.qid] || (bank[o.qid] = { qid: o.qid, history: [] });
-        rec.subject = o.subject; rec.topic = o.topic || "";
-        rec.question = o.question; rec.options = o.options; rec.answer = o.answer; rec.explanation = o.explanation || "";
-        rec.history.push({ date: ts, outcome: o.outcome, chosen: o.chosen });
-      });
-      saveBank(bank);
-    }
     function readNotes() { return readJson(NOTES_KEY, {}); }
     function saveNoteForSet(setId, text) { const n = readNotes(); n[setId] = text; localStorage.setItem(NOTES_KEY, JSON.stringify(n)); }
     function getNoteForSet(setId) { return readNotes()[setId] || ""; }
@@ -864,16 +840,10 @@
     }
     function mergeCloudAttemptRows(rows) {
       const results = loadResults();
-      const processed = getProcessedCloudIds();
       let changed = false;
       (rows || []).forEach(row => {
         const cloudResult = cloudAttemptToResult(row);
         const existing = results.find(r => sameAttempt(r, cloudResult));
-        // merge outcomes into question bank for any cloud row not yet processed (deduped by cloud row id)
-        if (row.outcomes && row.id && !processed.has(String(row.id))) {
-          updateQBankFromOutcomes(row.outcomes, row.created_at);
-          markCloudIdProcessed(row.id);
-        }
         if (existing) {
           if (!existing.cloudId && cloudResult.cloudId) {
             existing.cloudId = cloudResult.cloudId;
@@ -905,7 +875,7 @@
       if (!sb || !state.user) return { pushed: 0, pending: 0 };
       const pending = loadResults().filter(r => !r.cloudId && r.setId !== "cloud");
       let pushed = 0;
-      for (const r of pending) { if (await pushCloudAttempt(r, null)) pushed++; }
+      for (const r of pending) { if (await pushCloudAttempt(r)) pushed++; }
       return { pushed, pending: pending.length };
     }
     // पूरी question-bank cloud पर रखें ताकि redo deck हर device पर एक जैसा रहे — per-attempt outcomes पर निर्भर नहीं।
@@ -995,12 +965,7 @@
           perTopic
         });
         saveResults(results);
-        const outcomes = set.questions.map((q, i) => {
-          const qid = q.qid || hashQ(q.question, q.options);
-          const chosen = state.answers[i];
-          return { qid, subject: q.subject, topic: q.topic || "", question: q.question, options: q.options, answer: q.answer, explanation: q.explanation || "", outcome: chosen === null ? "skipped" : chosen === q.answer ? "correct" : "wrong", chosen };
-        });
-        pushCloudAttempt(results[0], outcomes); // cloud पर भेजें ताकि analysis किसी भी device से दिखे (best-effort)
+        pushCloudAttempt(results[0]); // attempt summary cloud पर (redo bank pushCloudBank() से अलग sync होता है)
       }
       state.resultRecorded = true;
     }
