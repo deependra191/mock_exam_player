@@ -671,7 +671,8 @@
       cloudMsg: "",
       dashboardData: null,
       notesText: "",
-      notesEditMode: false
+      notesEditMode: false,
+      resyncBusy: false
     };
 
     // ---- Supabase sync helpers (सब best-effort; offline पर app local से चलता रहता है) ----
@@ -713,21 +714,24 @@
       try { await sb.from("exam_sets").update({ note: noteText }).eq("id", set.cloudId); } catch (e) { /* ignore */ }
     }
     async function pushCloudAttempt(r, outcomes) {
-      if (!sb || !state.user) return;
+      if (!sb || !state.user) return false;
       const base = { set_title: r.title, score: r.score, total: r.total, attempted: r.attempted, per_topic: r.perTopic, taker: state.user.email };
       async function doInsert(payload) {
-        const { data } = await sb.from("attempts").insert(payload).select("id,created_at").single();
+        const { data, error } = await sb.from("attempts").insert(payload).select("id,created_at").single();
+        if (error) throw error; // supabase-js returns errors instead of throwing — surface it so the retry below actually runs
         if (data && data.id) {
           const results = loadResults();
           const saved = results.find(x => x.id === r.id);
           if (saved) { saved.cloudId = data.id; saved.cloudDate = data.created_at; saved.cloudTaker = state.user.email; saveResults(results); }
+          return true;
         }
+        return false;
       }
       try {
-        await doInsert({ ...base, outcomes: outcomes || null });
+        return await doInsert({ ...base, outcomes: outcomes || null });
       } catch (e) {
-        // outcomes column may not exist yet — retry without it
-        try { await doInsert(base); } catch (e2) { /* ignore */ }
+        // older DBs may lack the outcomes column — retry without it so the attempt still syncs
+        try { return await doInsert(base); } catch (e2) { return false; }
       }
     }
 
@@ -896,6 +900,14 @@
         return mergeCloudAttemptRows(data);
       } catch (e) { return false; }
     }
+    // किसी भी local attempt को cloud पर भेजें जो पहले upload नहीं हो पाया (offline/पुराना bug)। cloudId वाले already-synced छोड़ें।
+    async function resyncPendingAttempts() {
+      if (!sb || !state.user) return { pushed: 0, pending: 0 };
+      const pending = loadResults().filter(r => !r.cloudId && r.setId !== "cloud");
+      let pushed = 0;
+      for (const r of pending) { if (await pushCloudAttempt(r, null)) pushed++; }
+      return { pushed, pending: pending.length };
+    }
     // हर हल किए प्रश्न का outcome question-bank में रखें (recall/redo के लिए)। qid से dedup होता है।
     function updateQuestionBank(set, answers) {
       const bank = loadBank();
@@ -1029,6 +1041,7 @@
           state.user = data.session.user;
           await pullCloudSets();
           await pullCloudAttempts();
+          await resyncPendingAttempts(); // recover attempts that failed to upload earlier (offline/old bug)
           render();
         } else if (state.view === "home") {
           state.view = "login"; render(); // पहली बार — login माँगें
@@ -1205,6 +1218,7 @@
           state.user = data.user; state.authBusy = false; state.authError = "";
           await pullCloudSets();
           await pullCloudAttempts();
+          await resyncPendingAttempts(); // recover attempts that failed to upload earlier (offline/old bug)
           state.view = "home"; render();
         } catch (e) { state.authError = String(e.message || e); state.authBusy = false; render(); }
       },
@@ -1222,6 +1236,21 @@
           mergeCloudAttemptRows(state.dashboardData);
         } catch (e) { state.dashboardData = []; }
         render();
+      },
+      async resyncNow() {
+        if (!sb || !state.user) { alert("Log in first to sync your tests to the cloud."); return; }
+        if (state.resyncBusy) return;
+        state.resyncBusy = true; render();
+        await pullCloudAttempts();                 // match anything already in the cloud first (avoids duplicates)
+        const { pushed, pending } = await resyncPendingAttempts();
+        // reload cloud rows so the freshly-pushed tests show up in the dashboard
+        try {
+          const { data } = await sb.from("attempts").select("*").order("created_at", { ascending: false });
+          state.dashboardData = data || [];
+          mergeCloudAttemptRows(state.dashboardData);
+        } catch (e) { /* network — keep current data */ }
+        state.resyncBusy = false; render();
+        alert(pending === 0 ? "All local tests are already in the cloud." : `Synced ${pushed} of ${pending} local test(s) to the cloud.`);
       },
       redoSetTopic(v) { state.redoTopic = v; render(); },
       redoSetLimit(v) { state.redoLimit = v === "all" ? "all" : Number(v); render(); },
@@ -1564,7 +1593,10 @@
         return `<main class="wrap"><section class="card"><div class="pad">
           <h1>🌐 Cloud dashboard</h1>
           <div class="notice">No attempts in the cloud yet. As soon as a test is submitted on any device, it will show here.</div>
-          <div class="row" style="margin-top:16px"><button class="btn primary" onclick="actions.backHome()">Home</button></div>
+          <div class="row" style="margin-top:16px">
+            <button class="btn primary" onclick="actions.backHome()">Home</button>
+            <button class="btn" onclick="actions.resyncNow()">${state.resyncBusy ? "Syncing…" : "🔁 Resync local tests"}</button>
+          </div>
         </div></section></main>`;
       }
       const accColor = pct => pct < 50 ? "var(--red)" : pct < 75 ? "var(--amber)" : "var(--green)";
@@ -1603,6 +1635,7 @@
         <div class="row" style="margin-top:18px">
           <button class="btn primary" onclick="actions.backHome()">Home</button>
           <button class="btn blue" onclick="actions.showDashboard()">Refresh</button>
+          <button class="btn" onclick="actions.resyncNow()">${state.resyncBusy ? "Syncing…" : "🔁 Resync local tests"}</button>
         </div>
       </div></section></main>`;
     }
