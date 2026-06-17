@@ -602,6 +602,7 @@
     const SESSION_KEY = "uptet_quiz_player_sessions_v2"; // अब per-set map: { [setId]: session }
     const RESULTS_KEY = "uptet_quiz_player_results_v1";
     const QBANK_KEY = "uptet_quiz_player_qbank_v1";
+    const CLOUD_BANK_KEY = "uptet_quiz_player_cloud_bank_v1"; // cloudIds already merged into question bank
     const NOTES_KEY = "uptet_quiz_player_notes_v1";
     // Supabase — cloud sync (exams push, attempts pull). publishable key public होना सुरक्षित है; असली सुरक्षा login + RLS से।
     const SB_URL = "https://bpyrgsjhttcntdywaeps.supabase.co";
@@ -681,24 +682,23 @@
         if (!error && data) { set.cloudId = data.id; saveSets(); state.cloudMsg = "☁️ Uploaded to cloud — reload on the other device to see it."; render(); }
       } catch (e) { /* ignore */ }
     }
-    async function pushCloudAttempt(r) {
+    async function pushCloudAttempt(r, outcomes) {
       if (!sb || !state.user) return;
-      try {
-        const { data } = await sb.from("attempts").insert({
-          set_title: r.title, score: r.score, total: r.total, attempted: r.attempted,
-          per_topic: r.perTopic, taker: state.user.email
-        }).select("id,created_at").single();
+      const base = { set_title: r.title, score: r.score, total: r.total, attempted: r.attempted, per_topic: r.perTopic, taker: state.user.email };
+      async function doInsert(payload) {
+        const { data } = await sb.from("attempts").insert(payload).select("id,created_at").single();
         if (data && data.id) {
           const results = loadResults();
           const saved = results.find(x => x.id === r.id);
-          if (saved) {
-            saved.cloudId = data.id;
-            saved.cloudDate = data.created_at;
-            saved.cloudTaker = state.user.email;
-            saveResults(results);
-          }
+          if (saved) { saved.cloudId = data.id; saved.cloudDate = data.created_at; saved.cloudTaker = state.user.email; saveResults(results); }
         }
-      } catch (e) { /* ignore */ }
+      }
+      try {
+        await doInsert({ ...base, outcomes: outcomes || null });
+      } catch (e) {
+        // outcomes column may not exist yet — retry without it
+        try { await doInsert(base); } catch (e2) { /* ignore */ }
+      }
     }
 
     function uid() { return "quiz-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8); }
@@ -768,6 +768,21 @@
     function saveResults(arr) { localStorage.setItem(RESULTS_KEY, JSON.stringify(arr)); }
     function loadBank() { return readJson(QBANK_KEY, {}); }
     function saveBank(b) { localStorage.setItem(QBANK_KEY, JSON.stringify(b)); }
+    function getProcessedCloudIds() { return new Set(readJson(CLOUD_BANK_KEY, [])); }
+    function markCloudIdProcessed(id) { const s = getProcessedCloudIds(); s.add(String(id)); localStorage.setItem(CLOUD_BANK_KEY, JSON.stringify([...s])); }
+    function updateQBankFromOutcomes(outcomes, date) {
+      if (!Array.isArray(outcomes) || !outcomes.length) return;
+      const bank = loadBank();
+      const ts = date || new Date().toISOString();
+      outcomes.forEach(o => {
+        if (!o.qid) return;
+        const rec = bank[o.qid] || (bank[o.qid] = { qid: o.qid, history: [] });
+        rec.subject = o.subject; rec.topic = o.topic || "";
+        rec.question = o.question; rec.options = o.options; rec.answer = o.answer; rec.explanation = o.explanation || "";
+        rec.history.push({ date: ts, outcome: o.outcome, chosen: o.chosen });
+      });
+      saveBank(bank);
+    }
     function readNotes() { return readJson(NOTES_KEY, {}); }
     function saveNoteForSet(setId, text) { const n = readNotes(); n[setId] = text; localStorage.setItem(NOTES_KEY, JSON.stringify(n)); }
     function getNoteForSet(setId) { return readNotes()[setId] || ""; }
@@ -815,10 +830,16 @@
     }
     function mergeCloudAttemptRows(rows) {
       const results = loadResults();
+      const processed = getProcessedCloudIds();
       let changed = false;
       (rows || []).forEach(row => {
         const cloudResult = cloudAttemptToResult(row);
         const existing = results.find(r => sameAttempt(r, cloudResult));
+        // merge outcomes into question bank for any cloud row not yet processed (deduped by cloud row id)
+        if (row.outcomes && row.id && !processed.has(String(row.id))) {
+          updateQBankFromOutcomes(row.outcomes, row.created_at);
+          markCloudIdProcessed(row.id);
+        }
         if (existing) {
           if (!existing.cloudId && cloudResult.cloudId) {
             existing.cloudId = cloudResult.cloudId;
@@ -890,7 +911,12 @@
           perTopic
         });
         saveResults(results);
-        pushCloudAttempt(results[0]); // cloud पर भेजें ताकि analysis किसी भी device से दिखे (best-effort)
+        const outcomes = set.questions.map((q, i) => {
+          const qid = q.qid || hashQ(q.question, q.options);
+          const chosen = state.answers[i];
+          return { qid, subject: q.subject, topic: q.topic || "", question: q.question, options: q.options, answer: q.answer, explanation: q.explanation || "", outcome: chosen === null ? "skipped" : chosen === q.answer ? "correct" : "wrong", chosen };
+        });
+        pushCloudAttempt(results[0], outcomes); // cloud पर भेजें ताकि analysis किसी भी device से दिखे (best-effort)
       }
       state.resultRecorded = true;
     }
@@ -1131,7 +1157,7 @@
         state.view = "history"; render();
         if (await pullCloudAttempts()) render();
       },
-      showRedo() { state.view = "redo"; render(); },
+      async showRedo() { state.view = "redo"; render(); if (await pullCloudAttempts()) render(); },
       showNotes(setId) { state.notesText = getNoteForSet(setId); state.view = "notes"; render(); },
       notesInput(el) { state.notesText = el.value; },
       saveNote() { saveNoteForSet(state.selectedSetId, state.notesText.trim()); state.view = "home"; render(); },
