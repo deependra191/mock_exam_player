@@ -7,7 +7,7 @@ has questions *and* a notes space, so she can read study notes right where she p
 
 - **Not production-grade. It just needs to work.** Prefer the smallest change that does the job over
   clever abstractions. There is no framework, no build step, no tests, no backend code.
-- **One file does everything.** All HTML, CSS, JS, and a default exam live in `index.html` (~1650 lines).
+- **One file does everything.** All HTML, CSS, JS, and a default exam live in `index.html` (~1690 lines).
 - **Works fully offline.** The cloud (Supabase) is an optional bonus; localStorage is the source of truth.
 - **The generic name is on purpose** — it can be reused for any multiple-choice exam, not just UPTET.
 - **Notes-in-the-same-space is a core comfort feature**, not an add-on. Don't break it.
@@ -24,19 +24,19 @@ has questions *and* a notes space, so she can read study notes right where she p
 
 Everything is in `index.html`. Two CDN scripts (lines 187-188): `@supabase/supabase-js@2` (cloud) and
 `marked` (markdown for notes). The default exam is inline JSON in `<script id="default-set">` (line 192,
-parsed at line 646).
+parsed at line 645).
 
 It's a tiny state machine:
 
-- **One global `state` object** (lines 648-675) holds everything — current view, sets, active exam,
+- **One global `state` object** (lines 647-675) holds everything — current view, sets, active exam,
   answers, timer, logged-in user, notes draft, etc.
-- **`render()`** (lines 1611-1629) reads `state.view` and swaps `#app`'s innerHTML by calling the matching
+- **`render()`** (lines 1654-1672) reads `state.view` and swaps `#app`'s innerHTML by calling the matching
   `render<View>()` function. Views: `home`, `login`, `dashboard`, `import`, `resume`, `exam`, `result`,
   `history`, `redo`, `notes`.
-- **`window.actions.*`** (starts line 1115) are the event handlers. The rendered HTML wires buttons via
+- **`window.actions.*`** (starts line 1136) are the event handlers. The rendered HTML wires buttons via
   inline `onclick="actions.foo()"`. An action mutates `state`, persists, then calls `render()`.
 - **Navigation** uses the History API so the phone's back button works: `render()` does
-  `history.pushState` on view change; a `popstate` listener (lines 1631-1640) restores `state.view`
+  `history.pushState` on view change; a `popstate` listener (lines 1674-1683) restores `state.view`
   (with a safety fallback to `home` for exam/result/resume views that need an active set).
 
 ## Data model
@@ -50,13 +50,13 @@ It's a tiny state machine:
 
 **Set:** `{ "title": "…", "durationMinutes": 30, "questions": [ … ] }`.
 
-`normalizeSet()` (line 747) validates a set and **rejects the whole set** if any question has a bad
-`subjectId`/`topicId` (lines 758-762). It also stamps each question with a stable `qid` = hash of
-question text + options (`hashQ`, line 741), so the *same* question across different sets shares one
+`normalizeSet()` (line 742) validates a set and **rejects the whole set** if any question has a bad
+`subjectId`/`topicId` (lines 753-757). It also stamps each question with a stable `qid` = hash of
+question text + options (`hashQ`, line 736), so the *same* question across different sets shares one
 entry in the question bank (this powers the cross-set redo deck). It resolves the human-readable
 `subject`/`topic` names from `TAXONOMY`.
 
-**`TAXONOMY`** (lines 631-645) is the single source of truth for subjects/topics. Subject codes:
+**`TAXONOMY`** (lines 630-644) is the single source of truth for subjects/topics. Subject codes:
 `CDP, HIN, ENG, SKT, URD, MATH, EVS, SCI, SST, GK, REAS, COMP, SUP` — each with its own topic codes.
 
 **localStorage keys** (declared near the top of the script, all prefixed `uptet_quiz_player_`):
@@ -72,18 +72,18 @@ entry in the question bank (this powers the cross-set redo deck). It resolves th
 
 ## Feature map (where things live)
 
-- **Take an exam:** `startSet()` (1076) + `startTimer()` (1059) → `renderExam()` (1354). Answers save to
-  the session on every tap (`saveSession`, 997; also on tab-hide, line 1642).
-- **Scoring/results:** `score()` (1112) counts correct, `attempted()` (1113) counts answered.
-  `recordResultOnce()` (916) writes the result + per-topic breakdown and updates the question bank.
-  `renderResult()` (1403) shows the score and lets you review wrong/skipped/correct with explanations.
-- **Redo deck:** `getMistakeRecords()` (965) + `buildRedoSet()` (985) build a practice set from past
-  mistakes. Redo sets carry `isRedo: true` (line 990), and `recordResultOnce` skips saving results for
-  them (line 920) — practising mistakes shouldn't pollute history.
-- **History/analytics:** `aggregateTopics()` (954) rolls attempts up by topic; `renderHistory()` (1437)
+- **Take an exam:** `startSet()` (1097) + `startTimer()` (1080) → `renderExam()` (1393). Answers save to
+  the session on every tap (`saveSession`, 1016; also on tab-hide, line 1685).
+- **Scoring/results:** `score()` (1133) counts correct, `attempted()` (1134) counts answered.
+  `recordResultOnce()` (939) writes the result + per-topic breakdown and updates the question bank.
+  `renderResult()` (1442) shows the score and lets you review wrong/skipped/correct with explanations.
+- **Redo deck:** `getMistakeRecords()` (984) + `buildRedoSet()` (1004) build a practice set from past
+  mistakes. Redo sets carry `isRedo: true` (line 1009), and `recordResultOnce` skips saving results for
+  them (line 944) — practising mistakes shouldn't pollute history.
+- **History/analytics:** `aggregateTopics()` (973) rolls attempts up by topic; `renderHistory()` (1476)
   shows weak topics and past scores.
-- **Notes:** `readNotes`/`saveNoteForSet`/`getNoteForSet` (816-818), keyed by `setId`. `renderNotes()`
-  (1313) has an edit/view toggle; view mode renders markdown via `marked.parse` (line 1326).
+- **Notes:** `readNotes`/`saveNoteForSet`/`getNoteForSet` (796-798), keyed by `setId`. `renderNotes()`
+  (1352) has an edit/view toggle; view mode renders markdown via `marked.parse` (line 1365).
 - **Cloud sync (Supabase):** config is the `SB_URL`/`SB_KEY` pair near the top of the script (the
   publishable key is fine to commit — real security is login + Row-Level Security). Auth is
   email/password (`signInWithPassword`). **All cloud calls are best-effort and fail silently** — never
@@ -98,14 +98,14 @@ entry in the question bank (this powers the cross-set redo deck). It resolves th
    it validates and saves.
 2. **Authoring the JSON:** questions are written externally (e.g. via a ChatGPT prompt) using the
    `subjectId`/`topicId` **codes from `TAXONOMY`**. The validator is strict, so the codes must match exactly.
-3. **Adding a new subject/topic:** add it to `TAXONOMY` in `index.html` (lines 631-645) **and** to the
-   external authoring prompt — they must stay in sync (see the code comment at line 630).
+3. **Adding a new subject/topic:** add it to `TAXONOMY` in `index.html` (lines 630-644) **and** to the
+   external authoring prompt — they must stay in sync (see the code comment at line 629).
 
 ## Conventions & gotchas
 
 - **Code comments are bilingual** (Hindi + English) — this is normal, keep the style.
-- **Escape all user/content text** through `esc()` (line 735) before putting it in HTML.
-- **Subject/topic keys are normalized** via `topicNorm`/`topicKey` (737-738) so casing/spacing collapse
+- **Escape all user/content text** through `esc()` (line 730) before putting it in HTML.
+- **Subject/topic keys are normalized** via `topicNorm`/`topicKey` (732-733) so casing/spacing collapse
   (`"Polity"`, `"polity "`, `" Polity"` → one key).
 - Redo sessions never record results; `main` is the live branch; cloud is optional.
 - No build/test commands exist — verify by opening the app in a browser and clicking through.
