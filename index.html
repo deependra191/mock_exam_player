@@ -682,10 +682,16 @@
         if (error || !data) return;
         let added = 0;
         data.forEach(row => {
-          if (state.sets.some(s => s.cloudId === row.id)) return;
+          const existing = state.sets.find(s => s.cloudId === row.id);
+          if (existing) {
+            // sync note from cloud (null means column absent — skip; "" means deleted)
+            if (row.note != null) saveNoteForSet(existing.id, row.note);
+            return;
+          }
           try {
             const set = normalizeSet({ title: row.title, durationMinutes: row.duration_minutes, questions: row.questions });
             set.cloudId = row.id;
+            if (row.note != null) saveNoteForSet(set.id, row.note);
             state.sets.push(set);
             added++;
           } catch (e) { /* invalid cloud set — छोड़ें */ }
@@ -701,6 +707,10 @@
           .select().single();
         if (!error && data) { set.cloudId = data.id; saveSets(); state.cloudMsg = "☁️ Uploaded to cloud — reload on the other device to see it."; render(); }
       } catch (e) { /* ignore */ }
+    }
+    async function pushCloudNote(set, noteText) {
+      if (!sb || !state.user || !set.cloudId) return;
+      try { await sb.from("exam_sets").update({ note: noteText }).eq("id", set.cloudId); } catch (e) { /* ignore */ }
     }
     async function pushCloudAttempt(r, outcomes) {
       if (!sb || !state.user) return;
@@ -1181,8 +1191,8 @@
       showNotes(setId) { state.notesText = getNoteForSet(setId); state.notesEditMode = !state.notesText; state.view = "notes"; render(); },
       editNote() { state.notesEditMode = true; render(); },
       notesInput(el) { state.notesText = el.value; },
-      saveNote() { const t = state.notesText.trim(); saveNoteForSet(state.selectedSetId, t); state.notesEditMode = !t; render(); },
-      deleteNote() { saveNoteForSet(state.selectedSetId, ""); state.notesText = ""; state.view = "home"; render(); },
+      saveNote() { const t = state.notesText.trim(); saveNoteForSet(state.selectedSetId, t); pushCloudNote(currentSet(), t); state.notesEditMode = !t; render(); },
+      deleteNote() { saveNoteForSet(state.selectedSetId, ""); pushCloudNote(currentSet(), ""); state.notesText = ""; state.view = "home"; render(); },
       backFromNotes() { state.view = "home"; render(); },
       async loginFromForm() {
         const email = (document.getElementById("li-email") || {}).value || "";
