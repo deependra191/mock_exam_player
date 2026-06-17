@@ -1296,7 +1296,6 @@
         <div class="row" style="margin-top:18px">
           <button class="btn good" onclick="actions.resume()">Resume</button>
           <button class="btn primary" onclick="actions.fresh()">Fresh start</button>
-          <button class="btn" onclick="actions.backHome()">Back</button>
         </div>
       </div></section></main>`;
     }
@@ -1309,7 +1308,7 @@
           <textarea class="textarea" style="min-height:420px;font-family:inherit;font-size:15px;line-height:1.65" oninput="actions.notesInput(this)" placeholder="Write notes in Markdown — # Heading, **bold**, | tables |, - lists…">${esc(state.notesText)}</textarea>
           <div class="row" style="margin-top:14px">
             <button class="btn primary" onclick="actions.saveNote()">Save</button>
-            ${hasNote ? `<button class="btn" onclick="actions.showNotes('${esc(set.id)}')">Cancel</button>` : `<button class="btn" onclick="actions.backFromNotes()">Back</button>`}
+            ${hasNote ? `<button class="btn" onclick="actions.showNotes('${esc(set.id)}')">Cancel</button>` : ""}
             ${hasNote ? `<button class="btn danger" onclick="actions.deleteNote()">Delete note</button>` : ""}
           </div>
         </div></section></main>`;
@@ -1319,7 +1318,6 @@
         <div class="header" style="justify-content:flex-end">
           <div class="row">
             <button class="btn blue" onclick="actions.editNote()">Edit</button>
-            <button class="btn" onclick="actions.backFromNotes()">Back</button>
           </div>
         </div>
         <div class="pad noteRender">${rendered}</div>
@@ -1338,7 +1336,6 @@
           <button class="btn" onclick="actions.saveImport(false)">Only Save</button>
           <button class="btn blue" onclick="actions.loadExample()">Load current sample</button>
           <button class="btn warn" onclick="actions.clearImport()">Clear</button>
-          <button class="btn" onclick="actions.backHome()">Back</button>
         </div>
         <div class="notice" style="margin-top:14px"><b>Future prompt:</b> “Output only strict JSON: title, durationMinutes, and a questions array where each question has subjectId, topicId (only approved taxonomy codes — never invent), question, options, answer (0-based index), explanation.”</div>
       </div></section></main>`;
