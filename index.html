@@ -908,6 +908,47 @@
       for (const r of pending) { if (await pushCloudAttempt(r, null)) pushed++; }
       return { pushed, pending: pending.length };
     }
+    // पूरी question-bank cloud पर रखें ताकि redo deck हर device पर एक जैसा रहे — per-attempt outcomes पर निर्भर नहीं।
+    async function pushCloudBank() {
+      if (!sb || !state.user) return;
+      try {
+        await sb.from("question_banks").upsert(
+          { taker: state.user.email, bank: loadBank(), updated_at: new Date().toISOString() },
+          { onConflict: "taker" }
+        );
+      } catch (e) { /* best-effort */ }
+    }
+    // cloud की सभी bank rows (अपनी + साथी की) local bank में merge करें। qid से, history को date+outcome+chosen से dedupe।
+    async function pullCloudBank() {
+      if (!sb || !state.user) return false;
+      try {
+        const { data, error } = await sb.from("question_banks").select("taker,bank");
+        if (error || !data) return false;
+        const local = loadBank();
+        let changed = false;
+        data.forEach(row => {
+          const remote = row.bank || {};
+          Object.keys(remote).forEach(qid => {
+            const rr = remote[qid]; if (!rr) return;
+            let lr = local[qid];
+            if (!lr) { lr = local[qid] = { qid, history: [] }; changed = true; }
+            if (rr.subject) lr.subject = rr.subject;
+            if (rr.topic != null) lr.topic = rr.topic;
+            if (rr.question) lr.question = rr.question;
+            if (rr.options) lr.options = rr.options;
+            if (rr.answer != null) lr.answer = rr.answer;
+            if (rr.explanation != null) lr.explanation = rr.explanation;
+            const seen = new Set((lr.history || []).map(h => h.date + "|" + h.outcome + "|" + h.chosen));
+            (rr.history || []).forEach(h => {
+              const k = h.date + "|" + h.outcome + "|" + h.chosen;
+              if (!seen.has(k)) { lr.history.push(h); seen.add(k); changed = true; }
+            });
+          });
+        });
+        if (changed) saveBank(local);
+        return changed;
+      } catch (e) { return false; }
+    }
     // हर हल किए प्रश्न का outcome question-bank में रखें (recall/redo के लिए)। qid से dedup होता है।
     function updateQuestionBank(set, answers) {
       const bank = loadBank();
@@ -929,6 +970,7 @@
       if (state.resultRecorded || !state.activeSet) return;
       const set = state.activeSet;
       updateQuestionBank(set, state.answers);
+      pushCloudBank(); // redo deck को cross-device रखें (redo attempts समेत, जो cloud attempt के रूप में नहीं भेजे जाते)
       if (!set.isRedo) {
         const perTopic = {};
         set.questions.forEach((q, i) => {
@@ -1042,6 +1084,7 @@
           await pullCloudSets();
           await pullCloudAttempts();
           await resyncPendingAttempts(); // recover attempts that failed to upload earlier (offline/old bug)
+          await pullCloudBank(); pushCloudBank(); // sync redo question-bank across devices
           render();
         } else if (state.view === "home") {
           state.view = "login"; render(); // पहली बार — login माँगें
@@ -1200,7 +1243,7 @@
         state.view = "history"; render();
         if (await pullCloudAttempts()) render();
       },
-      async showRedo() { state.view = "redo"; render(); if (await pullCloudAttempts()) render(); },
+      async showRedo() { state.view = "redo"; render(); const a = await pullCloudAttempts(); const b = await pullCloudBank(); if (a || b) render(); },
       showNotes(setId) { state.notesText = getNoteForSet(setId); state.notesEditMode = !state.notesText; state.view = "notes"; render(); },
       editNote() { state.notesEditMode = true; render(); },
       notesInput(el) { state.notesText = el.value; },
@@ -1219,6 +1262,7 @@
           await pullCloudSets();
           await pullCloudAttempts();
           await resyncPendingAttempts(); // recover attempts that failed to upload earlier (offline/old bug)
+          await pullCloudBank(); pushCloudBank(); // sync redo question-bank across devices
           state.view = "home"; render();
         } catch (e) { state.authError = String(e.message || e); state.authBusy = false; render(); }
       },
@@ -1243,6 +1287,7 @@
         state.resyncBusy = true; render();
         await pullCloudAttempts();                 // match anything already in the cloud first (avoids duplicates)
         const { pushed, pending } = await resyncPendingAttempts();
+        await pullCloudBank(); await pushCloudBank(); // also sync the redo question-bank both ways
         // reload cloud rows so the freshly-pushed tests show up in the dashboard
         try {
           const { data } = await sb.from("attempts").select("*").order("created_at", { ascending: false });
