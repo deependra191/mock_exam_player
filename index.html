@@ -602,6 +602,7 @@
     const SESSION_KEY = "uptet_quiz_player_sessions_v2"; // अब per-set map: { [setId]: session }
     const RESULTS_KEY = "uptet_quiz_player_results_v1";
     const QBANK_KEY = "uptet_quiz_player_qbank_v1";
+    const NOTES_KEY = "uptet_quiz_player_notes_v1";
     // Supabase — cloud sync (exams push, attempts pull). publishable key public होना सुरक्षित है; असली सुरक्षा login + RLS से।
     const SB_URL = "https://bpyrgsjhttcntdywaeps.supabase.co";
     const SB_KEY = "sb_publishable_YfflYfoB-_ojcTvFrzf3qQ_3K7TOjqe";
@@ -648,7 +649,8 @@
       authError: "",
       authBusy: false,
       cloudMsg: "",
-      dashboardData: null
+      dashboardData: null,
+      notesText: ""
     };
 
     // ---- Supabase sync helpers (सब best-effort; offline पर app local से चलता रहता है) ----
@@ -766,6 +768,9 @@
     function saveResults(arr) { localStorage.setItem(RESULTS_KEY, JSON.stringify(arr)); }
     function loadBank() { return readJson(QBANK_KEY, {}); }
     function saveBank(b) { localStorage.setItem(QBANK_KEY, JSON.stringify(b)); }
+    function readNotes() { return readJson(NOTES_KEY, {}); }
+    function saveNoteForSet(setId, text) { const n = readNotes(); n[setId] = text; localStorage.setItem(NOTES_KEY, JSON.stringify(n)); }
+    function getNoteForSet(setId) { return readNotes()[setId] || ""; }
     function stableStringify(value) {
       if (!value || typeof value !== "object") return JSON.stringify(value ?? null);
       if (Array.isArray(value)) return "[" + value.map(stableStringify).join(",") + "]";
@@ -1127,6 +1132,11 @@
         if (await pullCloudAttempts()) render();
       },
       showRedo() { state.view = "redo"; render(); },
+      showNotes(setId) { state.notesText = getNoteForSet(setId); state.view = "notes"; render(); },
+      notesInput(el) { state.notesText = el.value; },
+      saveNote() { saveNoteForSet(state.selectedSetId, state.notesText.trim()); state.view = "home"; render(); },
+      deleteNote() { saveNoteForSet(state.selectedSetId, ""); state.notesText = ""; state.view = "home"; render(); },
+      backFromNotes() { state.view = "home"; render(); },
       async loginFromForm() {
         const email = (document.getElementById("li-email") || {}).value || "";
         const pw = (document.getElementById("li-pw") || {}).value || "";
@@ -1215,6 +1225,7 @@
                 <button class="btn blue" onclick="actions.showImport()">Import new question JSON</button>
                 <button class="btn" onclick="actions.showHistory()">📊 History &amp; analysis</button>
                 <button class="btn warn" onclick="actions.showRedo()">🔁 Redo wrong questions</button>
+                ${getNoteForSet(set.id) ? `<button class="btn good" onclick="actions.showNotes('${esc(set.id)}')">📋 Check Notes</button>` : `<button class="btn" onclick="actions.showNotes('${esc(set.id)}')">📝 Add Note</button>`}
                 ${sb && state.user ? `<button class="btn blue" onclick="actions.showDashboard()">🌐 Cloud dashboard (all devices)</button>` : ""}
                 <button class="btn danger" onclick="actions.deleteCurrentSet()">Delete current set</button>
               </div>
@@ -1239,6 +1250,21 @@
           <button class="btn good" onclick="actions.resume()">Resume</button>
           <button class="btn primary" onclick="actions.fresh()">Fresh start</button>
           <button class="btn" onclick="actions.backHome()">Back</button>
+        </div>
+      </div></section></main>`;
+    }
+
+    function renderNotes() {
+      const set = currentSet();
+      const hasNote = !!getNoteForSet(set.id);
+      return `<main class="wrap"><section class="card"><div class="pad">
+        <h1>Notes</h1>
+        <p class="muted">${esc(set.title)}</p>
+        <textarea class="textarea" style="min-height:320px;font-family:inherit;font-size:15px;line-height:1.55" oninput="actions.notesInput(this)" placeholder="Write your notes here…">${esc(state.notesText)}</textarea>
+        <div class="row" style="margin-top:14px">
+          <button class="btn primary" onclick="actions.saveNote()">Save</button>
+          <button class="btn" onclick="actions.backFromNotes()">Back</button>
+          ${hasNote ? `<button class="btn danger" onclick="actions.deleteNote()">Delete note</button>` : ""}
         </div>
       </div></section></main>`;
     }
@@ -1528,6 +1554,7 @@
       else if (state.view === "resume") app.innerHTML = renderResume();
       else if (state.view === "exam") app.innerHTML = renderExam();
       else if (state.view === "result") app.innerHTML = renderResult();
+      else if (state.view === "notes") app.innerHTML = renderNotes();
     }
 
     document.addEventListener("visibilitychange", () => { if (document.hidden) saveSession(); });
