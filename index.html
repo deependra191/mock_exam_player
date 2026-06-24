@@ -935,6 +935,18 @@
       });
       saveBank(bank);
     }
+
+    // Cloud merges can append older events after newer local ones, so array order is not a
+    // reliable indication of the latest result. Resolve redo eligibility by timestamp.
+    function latestQuestionOutcome(history) {
+      if (!Array.isArray(history) || !history.length) return null;
+      return history.reduce((latest, item) => {
+        if (!latest) return item;
+        const itemTime = Date.parse(item.date || 0);
+        const latestTime = Date.parse(latest.date || 0);
+        return itemTime >= latestTime ? item : latest;
+      }, null);
+    }
     // एक पूरा हुआ attempt record करें — question-bank हमेशा update होता है; results history सिर्फ असली tests के लिए (redo को छोड़कर)।
     function recordResultOnce() {
       if (state.resultRecorded || !state.activeSet) return;
@@ -980,12 +992,16 @@
       });
       return agg;
     }
-    // सिर्फ़ कभी-गलत प्रश्न, latest activity पहले। हर रिकॉर्ड पर derived status जोड़ें।
+    // Redo deck में केवल unresolved प्रश्न रखें। नवीनतम उत्तर सही होते ही प्रश्न हट जाता है।
     function getMistakeRecords() {
       const bank = loadBank();
-      const recs = Object.values(bank).filter(r => Array.isArray(r.history) && r.history.some(h => h.outcome === "wrong"));
+      const recs = Object.values(bank).filter(r => {
+        if (!Array.isArray(r.history) || !r.history.some(h => h.outcome === "wrong")) return false;
+        const latest = latestQuestionOutcome(r.history);
+        return latest && latest.outcome !== "correct";
+      });
       recs.forEach(r => {
-        const last = r.history[r.history.length - 1];
+        const last = latestQuestionOutcome(r.history);
         r._lastOutcome = last.outcome;
         r._lastDate = last.date;
         r._wrongCount = r.history.filter(h => h.outcome === "wrong").length;
@@ -1270,11 +1286,6 @@
         const label = state.redoTopic === "all" ? `${recs.length} wrong questions` : recs[0]._label;
         startSet(buildRedoSet(recs, label), null);
       },
-      redoSolveOne(qid) {
-        const rec = loadBank()[qid];
-        if (!rec) { alert("Question not found."); return; }
-        startSet(buildRedoSet([rec], "one question"), null);
-      },
       clearHistory() {
         const msg = state.user
           ? "Clear cached history on this device? Cloud attempts will remain in the Cloud dashboard and may sync back after login/refresh."
@@ -1550,28 +1561,26 @@
       const limitBtn = (v, lbl) => `<button class="btn ${String(state.redoLimit) === String(v) ? "primary" : ""}" onclick="actions.redoSetLimit('${v}')">${lbl}</button>`;
       const recs = getFilteredMistakes();
       const rows = recs.map(r => {
-        const resolved = r._lastOutcome === "correct";
         const d = new Date(r._lastDate);
         const when = `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
         const qtext = r.question.length > 90 ? r.question.slice(0, 90) + "…" : r.question;
         return `<article class="reviewItem">
           <div class="row" style="justify-content:space-between;gap:8px">
             <span class="pill">${esc(r._label)}</span>
-            <span class="mono small" style="color:${resolved ? "var(--green)" : "var(--red)"}">${resolved ? "✓ now correct" : "✗ still wrong"} • wrong ${r._wrongCount}× • ${when}</span>
+            <span class="mono small" style="color:var(--red)">Needs practice • wrong ${r._wrongCount}× • ${when}</span>
           </div>
           <p style="margin:10px 0 8px">${esc(qtext)}</p>
-          <button class="btn primary" onclick="actions.redoSolveOne('${esc(r.qid)}')">Solve this question</button>
         </article>`;
       }).join("");
       return `<main class="wrap"><section class="card"><div class="pad">
         <h1>🔁 Redo deck (wrong questions)</h1>
-        <p class="muted">Wrong questions — newest first. Solve the whole batch or pick one from the list. Status turns green once you get it right.</p>
+        <p class="muted">Build one practice test from all unresolved questions or from one topic. Answer every question, then submit once. Correct answers are removed from this deck after submission.</p>
         <div class="grid" style="margin-top:8px">
           <label><b>Choose topic</b><select class="select" onchange="actions.redoSetTopic(this.value)">${topicOpts}</select></label>
           <div class="row">${limitBtn(15, "Recent 15")}${limitBtn(30, "Recent 30")}${limitBtn("all", "All")}</div>
         </div>
         <div class="row" style="margin-top:14px">
-          <button class="btn good" onclick="actions.redoSolveAll()">Solve these ${recs.length} together</button>
+          <button class="btn good" onclick="actions.redoSolveAll()">Start ${recs.length}-question practice test</button>
           <button class="btn" onclick="actions.backHome()">Home</button>
         </div>
         <div class="grid" style="margin-top:18px">${rows}</div>
