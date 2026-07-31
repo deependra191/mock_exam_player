@@ -161,6 +161,10 @@
        प्रश्न संख्या अपने अलग कॉलम में रहती है, ताकि टूटी हुई (wrap हुई) लाइनें नंबर के नीचे न जाकर
        टेक्स्ट के साथ align रहें / question number sits in its own column so wrapped lines line up
        with the text instead of starting under the number. */
+    /* select के नीचे की छोटी कड़ियाँ — button जैसी भारी न लगें। */
+    .btn.linkish { border: 0; background: transparent; padding: 4px 0; font-size: 13px; font-weight: 600;
+                   color: #2563eb; box-shadow: none; }
+    .btn.linkish:hover { text-decoration: underline; }
     .qText { display: flex; gap: 8px; align-items: baseline; font-size: clamp(17px, 2.4vw, 20px); font-weight: 600; line-height: 1.85; letter-spacing: .2px; }
     .qText > .qNum { flex: none; }
     .qText > .qBody { white-space: pre-line; flex: 1; min-width: 0; }
@@ -1433,6 +1437,13 @@
 
     window.actions = {
       selectSet(id) { state.selectedSetId = id; saveCurrent(); render(); },
+      // विषय बदलें → उसी विषय का पहला अध्याय चुन लें, ताकि दोनों dropdown मेल खाते रहें।
+      selectSubject(sid) {
+        const { groups } = pickerSubjects();
+        const list = (groups.get(sid) || []).slice().sort((a, b) => natCmp(a.title, b.title));
+        if (list.length) { state.selectedSetId = list[0].id; saveCurrent(); }
+        render();
+      },
       // पसंदीदा विषय ऊपर — सिर्फ़ इसी device पर (cloud पर कुछ नहीं जाता)।
       togglePinSubject() {
         const sid = setSubjectId(currentSet());
@@ -1669,34 +1680,47 @@
     function natCmp(a, b) { return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" }); }
     function loadPinnedSubjects() { const v = readJson(PINNED_KEY, []); return Array.isArray(v) ? v : []; }
     function savePinnedSubjects(list) { state.pinnedSubjects = list; try { localStorage.setItem(PINNED_KEY, JSON.stringify(list)); } catch (e) { /* छोटा data — विफल हो तो छोड़ें */ } }
-    function buildSetOptions() {
-      const archivedCount = state.sets.filter(s => s.archived).length;
-      // चुना हुआ set हमेशा दिखे, चाहे archived ही क्यों न हो — वरना चयन टूट जाता है।
-      let visible = state.sets.filter(s => state.showArchived || !s.archived || s.id === state.selectedSetId);
-      if (!visible.length) visible = state.sets.slice();
+    // picker दो चरणों में: पहले विषय, फिर उसी विषय के अध्याय। 178 sets की एक लंबी सूची
+    // के बजाय दो छोटी सूचियाँ — और pin सिर्फ़ पहली (विषय वाली) सूची पर लागू होता है।
+    function pickerVisibleSets() {
+      // चुना हुआ set हमेशा शामिल रहे, चाहे छिपा हो — वरना चयन टूट जाता है।
+      const v = state.sets.filter(s => state.showArchived || !s.archived || s.id === state.selectedSetId);
+      return v.length ? v : state.sets.slice();
+    }
+    function pickerSubjects() {
       const groups = new Map();
-      visible.forEach(s => {
+      pickerVisibleSets().forEach(s => {
         const sid = setSubjectId(s);
         if (!groups.has(sid)) groups.set(sid, []);
         groups.get(sid).push(s);
       });
       const pinned = state.pinnedSubjects.filter(sid => groups.has(sid));
-      const rest = [...groups.keys()].filter(sid => !pinned.includes(sid)).sort((a, b) => natCmp(subjectName(a), subjectName(b)));
-      const html = [...pinned, ...rest].map(sid => {
-        const opts = groups.get(sid).sort((a, b) => natCmp(a.title, b.title)).map(s =>
-          `<option value="${esc(s.id)}" ${s.id === state.selectedSetId ? "selected" : ""}>${s.archived ? "🗄️ " : ""}${esc(s.title)} — ${s.questions.length} q / ${s.durationMinutes} min</option>`).join("");
-        const label = (pinned.includes(sid) ? "📌 " : "") + subjectName(sid) + ` (${groups.get(sid).length})`;
-        return `<optgroup label="${esc(label)}">${opts}</optgroup>`;
-      }).join("");
-      return { html, archivedCount };
+      const rest = [...groups.keys()].filter(sid => !pinned.includes(sid))
+        .sort((a, b) => natCmp(subjectName(a), subjectName(b)));
+      return { order: [...pinned, ...rest], groups, pinned };
+    }
+    // इस समय कौन-सा विषय दिखना चाहिए: चुने हुए set का विषय।
+    function currentSubjectId() { return setSubjectId(currentSet()); }
+    function buildSubjectOptions() {
+      const { order, groups, pinned } = pickerSubjects();
+      const cur = currentSubjectId();
+      return order.map(sid =>
+        `<option value="${esc(sid)}" ${sid === cur ? "selected" : ""}>${pinned.includes(sid) ? "📌 " : ""}${esc(subjectName(sid))} (${groups.get(sid).length})</option>`
+      ).join("");
+    }
+    function buildChapterOptions() {
+      const { groups } = pickerSubjects();
+      const list = (groups.get(currentSubjectId()) || []).sort((a, b) => natCmp(a.title, b.title));
+      return list.map(s =>
+        `<option value="${esc(s.id)}" ${s.id === state.selectedSetId ? "selected" : ""}>${s.archived ? "🗄️ " : ""}${esc(s.title)} — ${s.questions.length} q</option>`
+      ).join("");
     }
 
     function renderHome() {
       const set = currentSet();
       const resume = getResumeSessionFor(set.id);
-      const picker = buildSetOptions();
-      const options = picker.html;
-      const curSid = setSubjectId(set);
+      const archivedCount = state.sets.filter(s => s.archived).length;
+      const curSid = currentSubjectId();
       const isPinned = state.pinnedSubjects.includes(curSid);
       return `<main class="wrap">
         <section class="card">
@@ -1711,19 +1735,22 @@
             ${state.cloudMsg ? `<div class="notice good">${esc(state.cloudMsg)}</div>` : ""}
             ${state.lastMessage ? `<div class="notice good">${esc(state.lastMessage)}</div>` : ""}
             <div class="grid" style="margin-top:16px">
-              <label><b>Choose practice set</b><select class="select" onchange="actions.selectSet(this.value)">${options}</select></label>
-              <div class="row small" style="align-items:center;gap:10px">
-                <button class="btn" style="padding:6px 12px" onclick="actions.togglePinSubject()">${isPinned ? "📌 Unpin" : "📌 Pin"} ${esc(subjectName(curSid))}</button>
-                <button class="btn" style="padding:6px 12px" onclick="actions.toggleArchiveSet()">${set.archived ? "↩️ Unhide this set" : "🗄️ Hide this set"}</button>
-                ${picker.archivedCount ? `<label class="muted" style="display:flex;align-items:center;gap:6px;margin:0">
-                  <input type="checkbox" ${state.showArchived ? "checked" : ""} onchange="actions.toggleShowArchived(this.checked)"> Show hidden (${picker.archivedCount})
-                </label>` : ""}
-              </div>
-              <p class="small muted" style="margin:0">Hiding only affects this list on this device — history, weak topics and the redo deck are unchanged.</p>
               <div class="grid two">
-                <div class="stat"><b>Title</b><p class="muted" style="margin-bottom:0">${esc(set.title)}</p></div>
-                <div class="stat"><b>Pattern</b><p class="muted" style="margin-bottom:0">${set.questions.length} questions • ${set.durationMinutes} min</p></div>
+                <label><b>Subject</b>
+                  <select class="select" onchange="actions.selectSubject(this.value)">${buildSubjectOptions()}</select>
+                  <button class="btn linkish" onclick="actions.togglePinSubject()">${isPinned ? "📌 Pinned — unpin" : "📌 Pin to top"}</button>
+                </label>
+                <label><b>Chapter</b>
+                  <select class="select" onchange="actions.selectSet(this.value)">${buildChapterOptions()}</select>
+                  <span class="row" style="gap:10px;align-items:center">
+                    <button class="btn linkish" onclick="actions.toggleArchiveSet()">${set.archived ? "↩️ Unhide" : "🗄️ Hide"}</button>
+                    ${archivedCount ? `<label class="small muted" style="display:flex;align-items:center;gap:6px;margin:0;font-weight:400">
+                      <input type="checkbox" ${state.showArchived ? "checked" : ""} onchange="actions.toggleShowArchived(this.checked)"> show hidden (${archivedCount})
+                    </label>` : ""}
+                  </span>
+                </label>
               </div>
+              <div class="stat"><b>${esc(set.title)}</b><p class="muted small" style="margin-bottom:0">${set.questions.length} questions • ${set.durationMinutes} min${set.archived ? " • 🗄️ hidden from the list (history and redo unaffected)" : ""}</p></div>
               ${resume ? `<div class="notice warn"><b>Resume available:</b> ${formatTime(resume.remaining)} was left in your last attempt.</div>` : ""}
               <div class="row">
                 <button class="btn primary" onclick="actions.start()">${resume ? "Resume / Start" : "Start test"}</button>
