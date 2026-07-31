@@ -92,6 +92,19 @@
       min-height: 48px;
     }
     .textarea { min-height: 260px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; line-height: 1.45; }
+    /* label के शीर्षक और उसके नीचे के control के बीच थोड़ी जगह। */
+    .field > b { display: block; margin-bottom: 7px; }
+    .field > .select { margin-bottom: 6px; }
+    /* select का अपना छोटा तीर हटाकर बड़ा तीर, और दाएँ किनारे से थोड़ी दूरी।
+       inline SVG को data URI में रखा है ताकि कोई बाहरी फ़ाइल न चाहिए। */
+    select.select {
+      appearance: none; -webkit-appearance: none;
+      padding-right: 44px;
+      background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6l5 5 5-5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      background-size: 16px 16px;
+    }
     .pill {
       display: inline-flex;
       align-items: center;
@@ -1736,11 +1749,11 @@
             ${state.lastMessage ? `<div class="notice good">${esc(state.lastMessage)}</div>` : ""}
             <div class="grid" style="margin-top:16px">
               <div class="grid two">
-                <label><b>Subject</b>
+                <label class="field"><b>Subject</b>
                   <select class="select" onchange="actions.selectSubject(this.value)">${buildSubjectOptions()}</select>
                   <button class="btn linkish" onclick="actions.togglePinSubject()">${isPinned ? "📌 Pinned — unpin" : "📌 Pin to top"}</button>
                 </label>
-                <label><b>Chapter</b>
+                <label class="field"><b>Chapter</b>
                   <select class="select" onchange="actions.selectSet(this.value)">${buildChapterOptions()}</select>
                   <span class="row" style="gap:10px;align-items:center">
                     <button class="btn linkish" onclick="actions.toggleArchiveSet()">${set.archived ? "↩️ Unhide" : "🗄️ Hide"}</button>
