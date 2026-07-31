@@ -92,6 +92,19 @@
       min-height: 48px;
     }
     .textarea { min-height: 260px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; line-height: 1.45; }
+    /* label के शीर्षक और उसके नीचे के control के बीच थोड़ी जगह। */
+    .field > b { display: block; margin-bottom: 7px; }
+    .field > .select { margin-bottom: 6px; }
+    /* select का अपना छोटा तीर हटाकर बड़ा तीर, और दाएँ किनारे से थोड़ी दूरी।
+       inline SVG को data URI में रखा है ताकि कोई बाहरी फ़ाइल न चाहिए। */
+    select.select {
+      appearance: none; -webkit-appearance: none;
+      padding-right: 44px;
+      background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6l5 5 5-5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      background-size: 16px 16px;
+    }
     .pill {
       display: inline-flex;
       align-items: center;
@@ -161,6 +174,10 @@
        प्रश्न संख्या अपने अलग कॉलम में रहती है, ताकि टूटी हुई (wrap हुई) लाइनें नंबर के नीचे न जाकर
        टेक्स्ट के साथ align रहें / question number sits in its own column so wrapped lines line up
        with the text instead of starting under the number. */
+    /* select के नीचे की छोटी कड़ियाँ — button जैसी भारी न लगें। */
+    .btn.linkish { border: 0; background: transparent; padding: 4px 0; font-size: 13px; font-weight: 600;
+                   color: #2563eb; box-shadow: none; }
+    .btn.linkish:hover { text-decoration: underline; }
     .qText { display: flex; gap: 8px; align-items: baseline; font-size: clamp(17px, 2.4vw, 20px); font-weight: 600; line-height: 1.85; letter-spacing: .2px; }
     .qText > .qNum { flex: none; }
     .qText > .qBody { white-space: pre-line; flex: 1; min-width: 0; }
@@ -632,6 +649,8 @@
     const RESULTS_KEY = "uptet_quiz_player_results_v1";
     const QBANK_KEY = "uptet_quiz_player_qbank_v1";
     const NOTES_KEY = "uptet_quiz_player_notes_v1";
+    // picker की सजावट — सिर्फ़ इसी device की पसंद, cloud पर नहीं जाती।
+    const PINNED_KEY = "uptet_quiz_player_pinned_subjects_v1";
 
     // ---- भंडारण: बड़े stores IndexedDB में, चालू exam की प्रगति localStorage में ----
     // क्यों: localStorage की सीमा ~5MB है और वह UTF-16 में नापी जाती है, यानी ~25 लाख अक्षर।
@@ -777,7 +796,9 @@
       notesEditMode: false,
       resyncBusy: false,
       setsSyncedFromCloud: false, // orphan bank prune सिर्फ़ तभी चले जब sets cloud से आ चुके हों
-      storageError: ""            // device पर सहेजना विफल हुआ तो यहाँ संदेश आता है
+      storageError: "",           // device पर सहेजना विफल हुआ तो यहाँ संदेश आता है
+      pinnedSubjects: [],         // पसंदीदा विषय — picker में सबसे ऊपर (सिर्फ़ इसी device पर)
+      showArchived: false         // छिपाए हुए sets दिखाएँ या नहीं
     };
 
     // ---- Supabase sync helpers (सब best-effort; offline पर app local से चलता रहता है) ----
@@ -1309,6 +1330,7 @@
     }
     async function init() {
       await hydrateStores(); // पहले render से पहले sets/bank/notes memory में आ जाएँ
+      state.pinnedSubjects = loadPinnedSubjects();
       state.sets = storeGet(SETS_KEY, []);
       if (!state.sets.length) {
         // built-in sample — सिर्फ़ इसी device पर। cloud पर कभी नहीं जाता, वरना हर खाली device
@@ -1320,6 +1342,12 @@
       }
       const current = localStorage.getItem(CURRENT_KEY);
       state.selectedSetId = current && state.sets.some(s => s.id === current) ? current : state.sets[0].id;
+      // शुरुआत में छिपाया हुआ set न खुले — कोई दिखने वाला set हो तो उसी पर आएँ।
+      const startSet_ = state.sets.find(s => s.id === state.selectedSetId);
+      if (startSet_ && startSet_.archived) {
+        const firstVisible = state.sets.find(s => !s.archived);
+        if (firstVisible) { state.selectedSetId = firstVisible.id; saveCurrent(); }
+      }
       state.importText = JSON.stringify({ title: "New practice set", durationMinutes: 30, questions: [] }, null, 2);
       render();
       bootstrapAuth(); // session restore + cloud pull (async, best-effort)
@@ -1422,6 +1450,35 @@
 
     window.actions = {
       selectSet(id) { state.selectedSetId = id; saveCurrent(); render(); },
+      // विषय बदलें → उसी विषय का पहला अध्याय चुन लें, ताकि दोनों dropdown मेल खाते रहें।
+      selectSubject(sid) {
+        const { groups } = pickerSubjects();
+        const list = (groups.get(sid) || []).slice().sort((a, b) => natCmp(a.title, b.title));
+        if (list.length) { state.selectedSetId = list[0].id; saveCurrent(); }
+        render();
+      },
+      // पसंदीदा विषय ऊपर — सिर्फ़ इसी device पर (cloud पर कुछ नहीं जाता)।
+      togglePinSubject() {
+        const sid = setSubjectId(currentSet());
+        if (!sid) return;
+        const list = state.pinnedSubjects.slice();
+        const i = list.indexOf(sid);
+        if (i >= 0) list.splice(i, 1); else list.unshift(sid);
+        savePinnedSubjects(list);
+        render();
+      },
+      // सिर्फ़ इस सूची से छिपाता है। set state.sets में बना रहता है, इसलिए उसका इतिहास,
+      // weak topics और redo deck ज्यों के त्यों रहते हैं।
+      toggleArchiveSet() {
+        const s = currentSet();
+        s.archived = !s.archived;
+        saveSets();
+        state.lastMessage = s.archived
+          ? `Hidden from the list: ${s.title} — its history and redo questions are untouched.`
+          : `Shown again: ${s.title}`;
+        render();
+      },
+      toggleShowArchived(v) { state.showArchived = !!v; render(); },
       showImport() { state.view = "import"; state.importError = ""; state.lastMessage = ""; render(); },
       showLogin() { state.view = "login"; state.authError = ""; render(); },
       backHome() { state.view = "home"; state.importError = ""; render(); },
@@ -1625,10 +1682,59 @@
       }
     };
 
+    // ---- picker को विषय के अनुसार समूहबद्ध करना ----
+    // ⚠️ यह सिर्फ़ दिखाने का मामला है। archive किया हुआ set state.sets में बना रहता है, इसलिए
+    // buildQuestionIndex() उसे पहले की तरह पहचानता है — redo deck, history, weakness analysis
+    // और orphan prune सब अछूते रहते हैं। अगर archive से set हटा दिया जाता तो prune उसकी
+    // bank history को अनाथ मानकर मिटा देता।
+    function setSubjectId(s) { return ((s.questions || [])[0] || {}).subjectId || ""; }
+    function subjectName(sid) { return (TAXONOMY[sid] && TAXONOMY[sid].name) || "अन्य"; }
+    // "CT 2" को "CT 10" से पहले रखने के लिए numeric-aware तुलना।
+    function natCmp(a, b) { return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" }); }
+    function loadPinnedSubjects() { const v = readJson(PINNED_KEY, []); return Array.isArray(v) ? v : []; }
+    function savePinnedSubjects(list) { state.pinnedSubjects = list; try { localStorage.setItem(PINNED_KEY, JSON.stringify(list)); } catch (e) { /* छोटा data — विफल हो तो छोड़ें */ } }
+    // picker दो चरणों में: पहले विषय, फिर उसी विषय के अध्याय। 178 sets की एक लंबी सूची
+    // के बजाय दो छोटी सूचियाँ — और pin सिर्फ़ पहली (विषय वाली) सूची पर लागू होता है।
+    function pickerVisibleSets() {
+      // चुना हुआ set हमेशा शामिल रहे, चाहे छिपा हो — वरना चयन टूट जाता है।
+      const v = state.sets.filter(s => state.showArchived || !s.archived || s.id === state.selectedSetId);
+      return v.length ? v : state.sets.slice();
+    }
+    function pickerSubjects() {
+      const groups = new Map();
+      pickerVisibleSets().forEach(s => {
+        const sid = setSubjectId(s);
+        if (!groups.has(sid)) groups.set(sid, []);
+        groups.get(sid).push(s);
+      });
+      const pinned = state.pinnedSubjects.filter(sid => groups.has(sid));
+      const rest = [...groups.keys()].filter(sid => !pinned.includes(sid))
+        .sort((a, b) => natCmp(subjectName(a), subjectName(b)));
+      return { order: [...pinned, ...rest], groups, pinned };
+    }
+    // इस समय कौन-सा विषय दिखना चाहिए: चुने हुए set का विषय।
+    function currentSubjectId() { return setSubjectId(currentSet()); }
+    function buildSubjectOptions() {
+      const { order, groups, pinned } = pickerSubjects();
+      const cur = currentSubjectId();
+      return order.map(sid =>
+        `<option value="${esc(sid)}" ${sid === cur ? "selected" : ""}>${pinned.includes(sid) ? "📌 " : ""}${esc(subjectName(sid))} (${groups.get(sid).length})</option>`
+      ).join("");
+    }
+    function buildChapterOptions() {
+      const { groups } = pickerSubjects();
+      const list = (groups.get(currentSubjectId()) || []).sort((a, b) => natCmp(a.title, b.title));
+      return list.map(s =>
+        `<option value="${esc(s.id)}" ${s.id === state.selectedSetId ? "selected" : ""}>${s.archived ? "🗄️ " : ""}${esc(s.title)} — ${s.questions.length} q</option>`
+      ).join("");
+    }
+
     function renderHome() {
       const set = currentSet();
       const resume = getResumeSessionFor(set.id);
-      const options = state.sets.map(s => `<option value="${esc(s.id)}" ${s.id === state.selectedSetId ? "selected" : ""}>${esc(s.title)} — ${s.questions.length} questions / ${s.durationMinutes} min</option>`).join("");
+      const archivedCount = state.sets.filter(s => s.archived).length;
+      const curSid = currentSubjectId();
+      const isPinned = state.pinnedSubjects.includes(curSid);
       return `<main class="wrap">
         <section class="card">
           <div class="pad">
@@ -1642,11 +1748,22 @@
             ${state.cloudMsg ? `<div class="notice good">${esc(state.cloudMsg)}</div>` : ""}
             ${state.lastMessage ? `<div class="notice good">${esc(state.lastMessage)}</div>` : ""}
             <div class="grid" style="margin-top:16px">
-              <label><b>Choose practice set</b><select class="select" onchange="actions.selectSet(this.value)">${options}</select></label>
               <div class="grid two">
-                <div class="stat"><b>Title</b><p class="muted" style="margin-bottom:0">${esc(set.title)}</p></div>
-                <div class="stat"><b>Pattern</b><p class="muted" style="margin-bottom:0">${set.questions.length} questions • ${set.durationMinutes} min</p></div>
+                <label class="field"><b>Subject</b>
+                  <select class="select" onchange="actions.selectSubject(this.value)">${buildSubjectOptions()}</select>
+                  <button class="btn linkish" onclick="actions.togglePinSubject()">${isPinned ? "📌 Pinned — unpin" : "📌 Pin to top"}</button>
+                </label>
+                <label class="field"><b>Chapter</b>
+                  <select class="select" onchange="actions.selectSet(this.value)">${buildChapterOptions()}</select>
+                  <span class="row" style="gap:10px;align-items:center">
+                    <button class="btn linkish" onclick="actions.toggleArchiveSet()">${set.archived ? "↩️ Unhide" : "🗄️ Hide"}</button>
+                    ${archivedCount ? `<label class="small muted" style="display:flex;align-items:center;gap:6px;margin:0;font-weight:400">
+                      <input type="checkbox" ${state.showArchived ? "checked" : ""} onchange="actions.toggleShowArchived(this.checked)"> show hidden (${archivedCount})
+                    </label>` : ""}
+                  </span>
+                </label>
               </div>
+              <div class="stat"><b>${esc(set.title)}</b><p class="muted small" style="margin-bottom:0">${set.questions.length} questions • ${set.durationMinutes} min${set.archived ? " • 🗄️ hidden from the list (history and redo unaffected)" : ""}</p></div>
               ${resume ? `<div class="notice warn"><b>Resume available:</b> ${formatTime(resume.remaining)} was left in your last attempt.</div>` : ""}
               <div class="row">
                 <button class="btn primary" onclick="actions.start()">${resume ? "Resume / Start" : "Start test"}</button>
