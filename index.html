@@ -157,8 +157,13 @@
     /* प्रश्न में दी गई पंक्ति-विभाजन (कथन I/II, अभिकथन-कारण, सूची सुमेलन) वैसी ही दिखे।
        pre-line = \n पर line break, बाकी अतिरिक्त space सामान्य की तरह सिमट जाए।
        प्रश्न शीर्षक नहीं, पढ़ने का पाठ है — इसलिए h2 की heading-styling हल्की की गई है:
-       थोड़ा छोटा, semibold, और खुली line-height (देवनागरी की मात्राएँ ऊपर-नीचे जगह माँगती हैं)। */
-    .qText { white-space: pre-line; font-size: clamp(17px, 2.4vw, 20px); font-weight: 600; line-height: 1.85; letter-spacing: .2px; }
+       थोड़ा छोटा, semibold, और खुली line-height (देवनागरी की मात्राएँ ऊपर-नीचे जगह माँगती हैं)।
+       प्रश्न संख्या अपने अलग कॉलम में रहती है, ताकि टूटी हुई (wrap हुई) लाइनें नंबर के नीचे न जाकर
+       टेक्स्ट के साथ align रहें / question number sits in its own column so wrapped lines line up
+       with the text instead of starting under the number. */
+    .qText { display: flex; gap: 8px; align-items: baseline; font-size: clamp(17px, 2.4vw, 20px); font-weight: 600; line-height: 1.85; letter-spacing: .2px; }
+    .qText > .qNum { flex: none; }
+    .qText > .qBody { white-space: pre-line; flex: 1; min-width: 0; }
     .small { font-size: 13px; }
     .footerSpace { height: env(safe-area-inset-bottom); }
     @media (min-width: 780px) {
@@ -1743,7 +1748,7 @@
                 <div class="row" style="justify-content:space-between;margin-bottom:12px">
                   <span class="pill">${esc(q.subject)}${q.topic ? " • " + esc(q.topic) : ""}</span>
                 </div>
-                <h2 class="qText">${state.index + 1}. ${esc(q.question)}</h2>
+                <h2 class="qText"><span class="qNum">${state.index + 1}.</span><span class="qBody">${esc(q.question)}</span></h2>
                 <div class="grid">${opts}</div>
                 <div class="nav3">
                   <button class="btn" onclick="actions.go(${state.index - 1})">Previous</button>
@@ -1778,7 +1783,7 @@
         const chosen = state.answers[i];
         return `<article class="reviewItem">
           <span class="pill">${esc(q.subject)}${q.topic ? " • " + esc(q.topic) : ""}</span>
-          <h3 class="qText" style="margin-top:10px">${i+1}. ${esc(q.question)}</h3>
+          <h3 class="qText" style="margin-top:10px"><span class="qNum">${i+1}.</span><span class="qBody">${esc(q.question)}</span></h3>
           ${chosen === null ? `<p class="muted"><b>Your answer:</b> skipped</p>` : `<p class="${chosen === q.answer ? "" : ""}" style="color:${chosen === q.answer ? "var(--green)" : "var(--red)"}"><b>Your answer:</b> ${esc(q.options[chosen])}</p>`}
           <p style="color:var(--green)"><b>Correct answer:</b> ${esc(q.options[q.answer])}</p>
           <p class="notice"><b>Explanation:</b> ${esc(q.explanation)}</p>
