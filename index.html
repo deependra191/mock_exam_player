@@ -627,6 +627,88 @@
     const RESULTS_KEY = "uptet_quiz_player_results_v1";
     const QBANK_KEY = "uptet_quiz_player_qbank_v1";
     const NOTES_KEY = "uptet_quiz_player_notes_v1";
+
+    // ---- भंडारण: बड़े stores IndexedDB में, चालू exam की प्रगति localStorage में ----
+    // क्यों: localStorage की सीमा ~5MB है और वह UTF-16 में नापी जाती है, यानी ~25 लाख अक्षर।
+    // 178 sets × 25 प्रश्न अकेले ~18.5 लाख अक्षर हैं; notes और bank मिलाकर सीमा पार हो जाती है।
+    // IndexedDB की सीमा disk-आधारित है, इसलिए sets/bank/notes वहाँ जाते हैं।
+    // ⚠️ SESSION_KEY जानबूझकर localStorage में ही रहता है: IDB के writes async हैं और
+    // visibilitychange/pagehide पर commit की गारंटी नहीं देते — iOS पर tab background होते ही
+    // चालू test की प्रगति गुम हो सकती है। localStorage synchronous है, इसलिए वहीं सुरक्षित है।
+    // RESULTS_KEY भी localStorage में है — वह छोटा (~1 लाख अक्षर) है, हटाने की ज़रूरत नहीं।
+    const IDB_NAME = "uptet_quiz_player", IDB_STORE = "kv";
+    const IDB_KEYS = [SETS_KEY, QBANK_KEY, NOTES_KEY];
+    let idb = null, idbBroken = false;
+    const memStore = {}; // hydrate-once cache — इसी से render() synchronous बना रहता है
+
+    function idbOpen() {
+      return new Promise((resolve, reject) => {
+        let req;
+        try { req = indexedDB.open(IDB_NAME, 1); } catch (e) { return reject(e); }
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+        req.onblocked = () => reject(new Error("IndexedDB blocked by another tab"));
+      });
+    }
+    function idbGet(key) {
+      return new Promise((resolve, reject) => {
+        const tx = idb.transaction(IDB_STORE, "readonly");
+        const r = tx.objectStore(IDB_STORE).get(key);
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+      });
+    }
+    function idbSet(key, value) {
+      return new Promise((resolve, reject) => {
+        const tx = idb.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).put(value, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+    }
+    // बूट पर एक बार: IDB खोलें, तीनों stores memory में लाएँ, और पहली बार localStorage से migrate करें।
+    async function hydrateStores() {
+      try {
+        idb = await idbOpen();
+        for (const k of IDB_KEYS) {
+          let v = await idbGet(k);
+          if (v === undefined) {
+            // एक-बार का migration। localStorage को छुआ नहीं जाता — वह जमी हुई read-only
+            // copy बनी रहती है, ताकि ज़रूरत पड़ने पर पीछे लौटा जा सके।
+            v = readJson(k, null);
+            if (v !== null) await idbSet(k, v);
+          }
+          memStore[k] = v;
+        }
+      } catch (e) {
+        idbBroken = true; // private mode/blocked — पूरी तरह localStorage पर चलते रहें
+      }
+      IDB_KEYS.forEach(k => { if (memStore[k] == null) memStore[k] = readJson(k, null); });
+    }
+    function storeGet(key, fallback) {
+      if (idbBroken) return readJson(key, fallback);
+      return memStore[key] == null ? fallback : memStore[key];
+    }
+    function storeSet(key, value) {
+      memStore[key] = value;
+      if (idbBroken) {
+        try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { storeWriteFailed(e); }
+        return;
+      }
+      idbSet(key, value).catch(storeWriteFailed); // async write-through
+    }
+    // लिखना विफल हो तो चुपचाप न टालें — user को दिखे कि बदलाव सुरक्षित नहीं हुआ।
+    function storeWriteFailed(e) {
+      if (state.storageError) return;
+      state.storageError = "⚠️ Could not save to this device's storage — your last change may not be saved. "
+        + ((e && e.message) ? e.message : "") + " Try reloading; your cloud data is safe.";
+      try { render(); } catch (_) { /* render से पहले हुआ हो तो छोड़ें */ }
+    }
     // Supabase — cloud sync (exams push, attempts pull). publishable key public होना सुरक्षित है; असली सुरक्षा login + RLS से।
     const SB_URL = "https://bpyrgsjhttcntdywaeps.supabase.co";
     const SB_KEY = "sb_publishable_YfflYfoB-_ojcTvFrzf3qQ_3K7TOjqe";
@@ -689,7 +771,8 @@
       notesText: "",
       notesEditMode: false,
       resyncBusy: false,
-      setsSyncedFromCloud: false // orphan bank prune सिर्फ़ तभी चले जब sets cloud से आ चुके हों
+      setsSyncedFromCloud: false, // orphan bank prune सिर्फ़ तभी चले जब sets cloud से आ चुके हों
+      storageError: ""            // device पर सहेजना विफल हुआ तो यहाँ संदेश आता है
     };
 
     // ---- Supabase sync helpers (सब best-effort; offline पर app local से चलता रहता है) ----
@@ -752,7 +835,7 @@
             clearSession(s.id);
             if (notes[s.id] != null) { delete notes[s.id]; notesChanged = true; }
           });
-          if (notesChanged) localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+          if (notesChanged) writeNotes(notes);
           state.sets = state.sets.filter(s => !deleted.includes(s));
           // सब कुछ हट गया तो app खाली न रह जाए — built-in sample वापस रखें (init जैसा)।
           if (!state.sets.length) { const sample = normalizeSet(DEFAULT_SET); sample.isLocalOnly = true; state.sets.push(sample); }
@@ -868,7 +951,7 @@
       };
     }
     function readJson(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } }
-    function saveSets() { localStorage.setItem(SETS_KEY, JSON.stringify(state.sets)); }
+    function saveSets() { storeSet(SETS_KEY, state.sets); }
     function saveCurrent() { if (state.selectedSetId) localStorage.setItem(CURRENT_KEY, state.selectedSetId); }
     function readSessions() { return readJson(SESSION_KEY, {}); }
     function writeSessions(m) { localStorage.setItem(SESSION_KEY, JSON.stringify(m)); }
@@ -881,10 +964,11 @@
     }
     function loadResults() { return readJson(RESULTS_KEY, []); }
     function saveResults(arr) { localStorage.setItem(RESULTS_KEY, JSON.stringify(arr)); }
-    function loadBank() { return readJson(QBANK_KEY, {}); }
-    function saveBank(b) { localStorage.setItem(QBANK_KEY, JSON.stringify(b)); }
-    function readNotes() { return readJson(NOTES_KEY, {}); }
-    function saveNoteForSet(setId, text) { const n = readNotes(); n[setId] = text; localStorage.setItem(NOTES_KEY, JSON.stringify(n)); }
+    function loadBank() { return storeGet(QBANK_KEY, {}); }
+    function saveBank(b) { storeSet(QBANK_KEY, b); }
+    function readNotes() { return storeGet(NOTES_KEY, {}); }
+    function writeNotes(n) { storeSet(NOTES_KEY, n); }
+    function saveNoteForSet(setId, text) { const n = readNotes(); n[setId] = text; writeNotes(n); }
     function getNoteForSet(setId) { return readNotes()[setId] || ""; }
     function stableStringify(value) {
       if (!value || typeof value !== "object") return JSON.stringify(value ?? null);
@@ -1218,8 +1302,9 @@
       };
       writeSessions(m);
     }
-    function init() {
-      state.sets = readJson(SETS_KEY, []);
+    async function init() {
+      await hydrateStores(); // पहले render से पहले sets/bank/notes memory में आ जाएँ
+      state.sets = storeGet(SETS_KEY, []);
       if (!state.sets.length) {
         // built-in sample — सिर्फ़ इसी device पर। cloud पर कभी नहीं जाता, वरना हर खाली device
         // अपनी एक copy upload करके duplicate बना देता। असली sets import से आते हैं।
@@ -1405,7 +1490,7 @@
           r.setId !== set.id && !(set.cloudId && r.setCloudId && r.setCloudId === set.cloudId));
         saveResults(keptResults);
         const notes = readNotes();
-        if (notes[set.id] != null) { delete notes[set.id]; localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); }
+        if (notes[set.id] != null) { delete notes[set.id]; writeNotes(notes); }
         clearSession(set.id); // deleted set की session भी हटाएँ
         state.sets = state.sets.filter(s => s.id !== set.id);
         state.selectedSetId = state.sets[0].id;
@@ -1548,6 +1633,7 @@
               <span>${state.user ? "☁️ Synced: " + esc(state.user.email) : "⚠️ Offline (not logged in)"}</span>
               ${state.user ? `<button class="btn" style="padding:6px 12px" onclick="actions.logout()">Logout</button>` : ""}
             </div>` : ""}
+            ${state.storageError ? `<div class="notice danger">${esc(state.storageError)}</div>` : ""}
             ${state.cloudMsg ? `<div class="notice good">${esc(state.cloudMsg)}</div>` : ""}
             ${state.lastMessage ? `<div class="notice good">${esc(state.lastMessage)}</div>` : ""}
             <div class="grid" style="margin-top:16px">
