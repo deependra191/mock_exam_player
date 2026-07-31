@@ -740,7 +740,25 @@
           state.sets = state.sets.filter(s => !dropped.includes(s));
           if (!state.sets.some(s => s.id === state.selectedSetId)) { state.selectedSetId = state.sets[0].id; saveCurrent(); }
         }
-        if (added || refreshed || dropped.length) { saveSets(); }
+        // दूसरे device पर delete हुए sets यहाँ से भी हटाएँ। cloud row का न होना ही delete का
+        // संकेत है — इसके बिना हटाया हुआ set बाकी devices पर हमेशा बना रहता था।
+        // सिर्फ़ cloudId वाले sets पर लागू: बिना cloudId वाले या तो built-in sample हैं या
+        // पुराने local sets जिनका migration (resyncPendingSets) अभी बाकी है — उन्हें न छुएँ।
+        const liveCloudIds = new Set(data.map(r => String(r.id)));
+        const deleted = state.sets.filter(s => s.cloudId && !liveCloudIds.has(String(s.cloudId)));
+        if (deleted.length) {
+          const notes = readNotes(); let notesChanged = false;
+          deleted.forEach(s => {
+            clearSession(s.id);
+            if (notes[s.id] != null) { delete notes[s.id]; notesChanged = true; }
+          });
+          if (notesChanged) localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+          state.sets = state.sets.filter(s => !deleted.includes(s));
+          // सब कुछ हट गया तो app खाली न रह जाए — built-in sample वापस रखें (init जैसा)।
+          if (!state.sets.length) { const sample = normalizeSet(DEFAULT_SET); sample.isLocalOnly = true; state.sets.push(sample); }
+          if (!state.sets.some(s => s.id === state.selectedSetId)) { state.selectedSetId = state.sets[0].id; saveCurrent(); }
+        }
+        if (added || refreshed || dropped.length || deleted.length) { saveSets(); }
         // sets अब cloud से पूरी तरह sync हैं — orphan bank prune इसी झंडे पर निर्भर है।
         state.setsSyncedFromCloud = true;
       } catch (e) { /* network — ignore */ }
