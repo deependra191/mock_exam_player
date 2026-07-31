@@ -697,7 +697,18 @@
             added++;
           } catch (e) { /* invalid cloud set — छोड़ें */ }
         });
-        if (added) { saveSets(); }
+        // built-in sample हटा दें अगर उसी title वाला असली cloud set local में आ चुका है —
+        // वरना खाली device पर दोनों (injected sample + cloud copy) साथ-साथ दिखते हैं।
+        // शर्त कड़ी रखी है: सिर्फ़ तब हटाएँ जब cloudId वाली copy सचमुच मौजूद हो (invalid cloud
+        // set normalizeSet में reject हो सकता है — तब sample ही इकलौता set रह जाना चाहिए)।
+        const syncedTitles = new Set(state.sets.filter(s => s.cloudId).map(s => s.title));
+        const dropped = state.sets.filter(s => s.isLocalOnly && syncedTitles.has(s.title));
+        if (dropped.length) {
+          dropped.forEach(s => clearSession(s.id));
+          state.sets = state.sets.filter(s => !dropped.includes(s));
+          if (!state.sets.some(s => s.id === state.selectedSetId)) { state.selectedSetId = state.sets[0].id; saveCurrent(); }
+        }
+        if (added || dropped.length) { saveSets(); }
       } catch (e) { /* network — ignore */ }
     }
     // cloud पर set डालें (नया) या बदलें (existingCloudId हो तो)। गड़बड़ी पर throw —
