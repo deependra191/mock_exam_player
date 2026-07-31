@@ -632,6 +632,8 @@
     const RESULTS_KEY = "uptet_quiz_player_results_v1";
     const QBANK_KEY = "uptet_quiz_player_qbank_v1";
     const NOTES_KEY = "uptet_quiz_player_notes_v1";
+    // picker की सजावट — सिर्फ़ इसी device की पसंद, cloud पर नहीं जाती।
+    const PINNED_KEY = "uptet_quiz_player_pinned_subjects_v1";
 
     // ---- भंडारण: बड़े stores IndexedDB में, चालू exam की प्रगति localStorage में ----
     // क्यों: localStorage की सीमा ~5MB है और वह UTF-16 में नापी जाती है, यानी ~25 लाख अक्षर।
@@ -777,7 +779,9 @@
       notesEditMode: false,
       resyncBusy: false,
       setsSyncedFromCloud: false, // orphan bank prune सिर्फ़ तभी चले जब sets cloud से आ चुके हों
-      storageError: ""            // device पर सहेजना विफल हुआ तो यहाँ संदेश आता है
+      storageError: "",           // device पर सहेजना विफल हुआ तो यहाँ संदेश आता है
+      pinnedSubjects: [],         // पसंदीदा विषय — picker में सबसे ऊपर (सिर्फ़ इसी device पर)
+      showArchived: false         // छिपाए हुए sets दिखाएँ या नहीं
     };
 
     // ---- Supabase sync helpers (सब best-effort; offline पर app local से चलता रहता है) ----
@@ -1309,6 +1313,7 @@
     }
     async function init() {
       await hydrateStores(); // पहले render से पहले sets/bank/notes memory में आ जाएँ
+      state.pinnedSubjects = loadPinnedSubjects();
       state.sets = storeGet(SETS_KEY, []);
       if (!state.sets.length) {
         // built-in sample — सिर्फ़ इसी device पर। cloud पर कभी नहीं जाता, वरना हर खाली device
@@ -1320,6 +1325,12 @@
       }
       const current = localStorage.getItem(CURRENT_KEY);
       state.selectedSetId = current && state.sets.some(s => s.id === current) ? current : state.sets[0].id;
+      // शुरुआत में छिपाया हुआ set न खुले — कोई दिखने वाला set हो तो उसी पर आएँ।
+      const startSet_ = state.sets.find(s => s.id === state.selectedSetId);
+      if (startSet_ && startSet_.archived) {
+        const firstVisible = state.sets.find(s => !s.archived);
+        if (firstVisible) { state.selectedSetId = firstVisible.id; saveCurrent(); }
+      }
       state.importText = JSON.stringify({ title: "New practice set", durationMinutes: 30, questions: [] }, null, 2);
       render();
       bootstrapAuth(); // session restore + cloud pull (async, best-effort)
@@ -1422,6 +1433,28 @@
 
     window.actions = {
       selectSet(id) { state.selectedSetId = id; saveCurrent(); render(); },
+      // पसंदीदा विषय ऊपर — सिर्फ़ इसी device पर (cloud पर कुछ नहीं जाता)।
+      togglePinSubject() {
+        const sid = setSubjectId(currentSet());
+        if (!sid) return;
+        const list = state.pinnedSubjects.slice();
+        const i = list.indexOf(sid);
+        if (i >= 0) list.splice(i, 1); else list.unshift(sid);
+        savePinnedSubjects(list);
+        render();
+      },
+      // सिर्फ़ इस सूची से छिपाता है। set state.sets में बना रहता है, इसलिए उसका इतिहास,
+      // weak topics और redo deck ज्यों के त्यों रहते हैं।
+      toggleArchiveSet() {
+        const s = currentSet();
+        s.archived = !s.archived;
+        saveSets();
+        state.lastMessage = s.archived
+          ? `Hidden from the list: ${s.title} — its history and redo questions are untouched.`
+          : `Shown again: ${s.title}`;
+        render();
+      },
+      toggleShowArchived(v) { state.showArchived = !!v; render(); },
       showImport() { state.view = "import"; state.importError = ""; state.lastMessage = ""; render(); },
       showLogin() { state.view = "login"; state.authError = ""; render(); },
       backHome() { state.view = "home"; state.importError = ""; render(); },
@@ -1625,10 +1658,46 @@
       }
     };
 
+    // ---- picker को विषय के अनुसार समूहबद्ध करना ----
+    // ⚠️ यह सिर्फ़ दिखाने का मामला है। archive किया हुआ set state.sets में बना रहता है, इसलिए
+    // buildQuestionIndex() उसे पहले की तरह पहचानता है — redo deck, history, weakness analysis
+    // और orphan prune सब अछूते रहते हैं। अगर archive से set हटा दिया जाता तो prune उसकी
+    // bank history को अनाथ मानकर मिटा देता।
+    function setSubjectId(s) { return ((s.questions || [])[0] || {}).subjectId || ""; }
+    function subjectName(sid) { return (TAXONOMY[sid] && TAXONOMY[sid].name) || "अन्य"; }
+    // "CT 2" को "CT 10" से पहले रखने के लिए numeric-aware तुलना।
+    function natCmp(a, b) { return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" }); }
+    function loadPinnedSubjects() { const v = readJson(PINNED_KEY, []); return Array.isArray(v) ? v : []; }
+    function savePinnedSubjects(list) { state.pinnedSubjects = list; try { localStorage.setItem(PINNED_KEY, JSON.stringify(list)); } catch (e) { /* छोटा data — विफल हो तो छोड़ें */ } }
+    function buildSetOptions() {
+      const archivedCount = state.sets.filter(s => s.archived).length;
+      // चुना हुआ set हमेशा दिखे, चाहे archived ही क्यों न हो — वरना चयन टूट जाता है।
+      let visible = state.sets.filter(s => state.showArchived || !s.archived || s.id === state.selectedSetId);
+      if (!visible.length) visible = state.sets.slice();
+      const groups = new Map();
+      visible.forEach(s => {
+        const sid = setSubjectId(s);
+        if (!groups.has(sid)) groups.set(sid, []);
+        groups.get(sid).push(s);
+      });
+      const pinned = state.pinnedSubjects.filter(sid => groups.has(sid));
+      const rest = [...groups.keys()].filter(sid => !pinned.includes(sid)).sort((a, b) => natCmp(subjectName(a), subjectName(b)));
+      const html = [...pinned, ...rest].map(sid => {
+        const opts = groups.get(sid).sort((a, b) => natCmp(a.title, b.title)).map(s =>
+          `<option value="${esc(s.id)}" ${s.id === state.selectedSetId ? "selected" : ""}>${s.archived ? "🗄️ " : ""}${esc(s.title)} — ${s.questions.length} q / ${s.durationMinutes} min</option>`).join("");
+        const label = (pinned.includes(sid) ? "📌 " : "") + subjectName(sid) + ` (${groups.get(sid).length})`;
+        return `<optgroup label="${esc(label)}">${opts}</optgroup>`;
+      }).join("");
+      return { html, archivedCount };
+    }
+
     function renderHome() {
       const set = currentSet();
       const resume = getResumeSessionFor(set.id);
-      const options = state.sets.map(s => `<option value="${esc(s.id)}" ${s.id === state.selectedSetId ? "selected" : ""}>${esc(s.title)} — ${s.questions.length} questions / ${s.durationMinutes} min</option>`).join("");
+      const picker = buildSetOptions();
+      const options = picker.html;
+      const curSid = setSubjectId(set);
+      const isPinned = state.pinnedSubjects.includes(curSid);
       return `<main class="wrap">
         <section class="card">
           <div class="pad">
@@ -1643,6 +1712,14 @@
             ${state.lastMessage ? `<div class="notice good">${esc(state.lastMessage)}</div>` : ""}
             <div class="grid" style="margin-top:16px">
               <label><b>Choose practice set</b><select class="select" onchange="actions.selectSet(this.value)">${options}</select></label>
+              <div class="row small" style="align-items:center;gap:10px">
+                <button class="btn" style="padding:6px 12px" onclick="actions.togglePinSubject()">${isPinned ? "📌 Unpin" : "📌 Pin"} ${esc(subjectName(curSid))}</button>
+                <button class="btn" style="padding:6px 12px" onclick="actions.toggleArchiveSet()">${set.archived ? "↩️ Unhide this set" : "🗄️ Hide this set"}</button>
+                ${picker.archivedCount ? `<label class="muted" style="display:flex;align-items:center;gap:6px;margin:0">
+                  <input type="checkbox" ${state.showArchived ? "checked" : ""} onchange="actions.toggleShowArchived(this.checked)"> Show hidden (${picker.archivedCount})
+                </label>` : ""}
+              </div>
+              <p class="small muted" style="margin:0">Hiding only affects this list on this device — history, weak topics and the redo deck are unchanged.</p>
               <div class="grid two">
                 <div class="stat"><b>Title</b><p class="muted" style="margin-bottom:0">${esc(set.title)}</p></div>
                 <div class="stat"><b>Pattern</b><p class="muted" style="margin-bottom:0">${set.questions.length} questions • ${set.durationMinutes} min</p></div>
