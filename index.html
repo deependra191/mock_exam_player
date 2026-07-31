@@ -681,12 +681,27 @@
       try {
         const { data, error } = await sb.from("exam_sets").select("*").order("created_at", { ascending: false });
         if (error || !data) return;
-        let added = 0;
+        let added = 0, refreshed = 0;
         data.forEach(row => {
           const existing = state.sets.find(s => s.cloudId === row.id);
           if (existing) {
             // sync note from cloud (null means column absent — skip; "" means deleted)
             if (row.note != null) saveNoteForSet(existing.id, row.note);
+            // cloud पर set बदला हो (सुधरी answer key/typo) तो local copy भी ताज़ा करें। इसके बिना
+            // जिस device पर set पहले से है वहाँ सुधार कभी पहुँचता ही नहीं — पुराना ही चलता रहता है।
+            const busyWithIt = state.activeSet && state.activeSet.id === existing.id && state.started && !state.finished;
+            if (busyWithIt) return; // exam बीच में है — प्रश्न नीचे से न बदलें
+            try {
+              const fresh = normalizeSet({ title: row.title, durationMinutes: row.duration_minutes, questions: row.questions });
+              if (existing.title !== fresh.title || existing.durationMinutes !== fresh.durationMinutes
+                  || stableStringify(existing.questions) !== stableStringify(fresh.questions)) {
+                existing.title = fresh.title;
+                existing.durationMinutes = fresh.durationMinutes;
+                existing.questions = fresh.questions;
+                clearSession(existing.id); // पुराने answers बदले हुए प्रश्नों पर लागू नहीं होते
+                refreshed++;
+              }
+            } catch (e) { /* invalid cloud set — local copy जस की तस रखें */ }
             return;
           }
           try {
@@ -708,7 +723,7 @@
           state.sets = state.sets.filter(s => !dropped.includes(s));
           if (!state.sets.some(s => s.id === state.selectedSetId)) { state.selectedSetId = state.sets[0].id; saveCurrent(); }
         }
-        if (added || dropped.length) { saveSets(); }
+        if (added || refreshed || dropped.length) { saveSets(); }
       } catch (e) { /* network — ignore */ }
     }
     // cloud पर set डालें (नया) या बदलें (existingCloudId हो तो)। गड़बड़ी पर throw —
