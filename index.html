@@ -941,11 +941,12 @@
       try {
         const { data, error } = await sb.from("exam_sets").select("id,title");
         if (error) return { pushed: 0, pending: pending.length }; // network — अगली बार फिर कोशिश होगी
-        (data || []).forEach(row => { if (!byTitle.has(row.title)) byTitle.set(row.title, row.id); });
+        // import जैसा ही normalized title match — दोनों जगह पहचान का नियम एक रहे।
+        (data || []).forEach(row => { const k = topicNorm(row.title); if (!byTitle.has(k)) byTitle.set(k, row.id); });
       } catch (e) { return { pushed: 0, pending: pending.length }; }
       let pushed = 0, changed = false;
       for (const set of pending) {
-        const existingId = byTitle.get(set.title);
+        const existingId = byTitle.get(topicNorm(set.title));
         if (existingId) { set.cloudId = existingId; changed = true; }        // पहले से cloud पर है — बस link कर दें
         else if (await pushCloudSet(set, true)) { pushed++; changed = true; }
         // note सिर्फ़ cloudId होने पर ही जा सकता है — इसलिए link/upload के तुरंत बाद भेजें।
@@ -1249,7 +1250,10 @@
         const blocked = cloudBlockReason();
         if (blocked) { state.importError = blocked + " Nothing was imported."; render(); return; }
         // same title + same question count = वही set (import का पुराना replace नियम)।
-        const existingIndex = state.sets.findIndex(s => s.title === set.title && s.questions.length === set.questions.length);
+        // title को normalize करके मिलाएँ (topicNorm = trim + एक space + lowercase)। पीछे लगा
+        // space या casing का फ़र्क़ अब गलती से नया cloud row नहीं बनाता।
+        const titleKey = topicNorm(set.title);
+        const existingIndex = state.sets.findIndex(s => topicNorm(s.title) === titleKey && s.questions.length === set.questions.length);
         const existing = existingIndex >= 0 ? state.sets[existingIndex] : null;
         state.importBusy = true; state.importError = ""; render();
         try {
