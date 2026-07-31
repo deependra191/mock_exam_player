@@ -683,7 +683,8 @@
       dashboardData: null,
       notesText: "",
       notesEditMode: false,
-      resyncBusy: false
+      resyncBusy: false,
+      setsSyncedFromCloud: false // orphan bank prune सिर्फ़ तभी चले जब sets cloud से आ चुके हों
     };
 
     // ---- Supabase sync helpers (सब best-effort; offline पर app local से चलता रहता है) ----
@@ -735,6 +736,8 @@
           if (!state.sets.some(s => s.id === state.selectedSetId)) { state.selectedSetId = state.sets[0].id; saveCurrent(); }
         }
         if (added || refreshed || dropped.length) { saveSets(); }
+        // sets अब cloud से पूरी तरह sync हैं — orphan bank prune इसी झंडे पर निर्भर है।
+        state.setsSyncedFromCloud = true;
       } catch (e) { /* network — ignore */ }
     }
     // cloud पर set डालें (नया) या बदलें (existingCloudId हो तो)। गड़बड़ी पर throw —
@@ -775,7 +778,12 @@
       if (!sb || !state.user) return false;
       // सिर्फ़ attempt summary भेजें — redo question-bank अलग से pushCloudBank() से sync होता है (दोबारा push नहीं)।
       try {
-        const payload = { set_title: r.title, score: r.score, total: r.total, attempted: r.attempted, per_topic: r.perTopic, taker: state.user.email };
+        // set_cloud_id = attempts → exam_sets की असली कड़ी (FK, on delete cascade)। इसी id से
+        // हर device एक ही नतीजे पर पहुँचता है — title मिलान की ज़रूरत नहीं रहती।
+        const setRef = state.sets.find(s => s.id === r.setId);
+        const payload = { set_title: r.title, score: r.score, total: r.total, attempted: r.attempted,
+          per_topic: r.perTopic, taker: state.user.email,
+          set_cloud_id: r.setCloudId || (setRef && setRef.cloudId) || null };
         const { data, error } = await sb.from("attempts").insert(payload).select("id,created_at").single();
         if (error || !data || !data.id) return false;
         const results = loadResults();
@@ -874,6 +882,7 @@
         cloudDate: row.created_at || null,
         cloudTaker: row.taker || "",
         setId: "cloud",
+        setCloudId: row.set_cloud_id || null, // किस set का attempt है — id से, title से नहीं
         title: row.set_title || "Test",
         date: row.created_at || new Date().toISOString(),
         total: Number(row.total) || 0,
@@ -910,6 +919,12 @@
             existing.cloudTaker = cloudResult.cloudTaker;
             changed = true;
           }
+          // set की असली कड़ी बाद में जुड़े (पुराने local record, या backfill हुई cloud row) तो
+          // यहाँ भी भर दें — तभी set delete होने पर purge id से हो पाता है, title से नहीं।
+          if (!existing.setCloudId && cloudResult.setCloudId) {
+            existing.setCloudId = cloudResult.setCloudId;
+            changed = true;
+          }
           return;
         }
         results.push(cloudResult);
@@ -926,7 +941,16 @@
       try {
         const { data, error } = await sb.from("attempts").select("*").order("created_at", { ascending: false });
         if (error || !data) return false;
-        return mergeCloudAttemptRows(data);
+        let changed = mergeCloudAttemptRows(data);
+        // cloud से हटाए गए attempts local से भी हटाएँ — set delete होने पर DB का FK cascade
+        // उनकी rows मिटा देता है, और यही उन्हें हर device से हटाने का संकेत है।
+        // सिर्फ़ वही हटाएँ जिनका cloudId है (यानी upload हो चुके थे) — बिना cloudId वाले अभी
+        // भेजे ही नहीं गए, उन्हें छूना नहीं। fetch विफल/खाली हो तो ऊपर ही लौट चुके हैं।
+        const liveIds = new Set(data.map(r => String(r.id)));
+        const before = loadResults();
+        const kept = before.filter(r => !(r.cloudId && !liveIds.has(String(r.cloudId))));
+        if (kept.length !== before.length) { saveResults(kept); changed = true; }
+        return changed;
       } catch (e) { return false; }
     }
     // किसी भी local attempt को cloud पर भेजें जो पहले upload नहीं हो पाया (offline/पुराना bug)। cloudId वाले already-synced छोड़ें।
@@ -990,12 +1014,9 @@
             const rr = remote[qid]; if (!rr) return;
             let lr = local[qid];
             if (!lr) { lr = local[qid] = { qid, history: [] }; changed = true; }
-            if (rr.subject) lr.subject = rr.subject;
-            if (rr.topic != null) lr.topic = rr.topic;
-            if (rr.question) lr.question = rr.question;
-            if (rr.options) lr.options = rr.options;
-            if (rr.answer != null) lr.answer = rr.answer;
-            if (rr.explanation != null) lr.explanation = rr.explanation;
+            // सिर्फ़ outcome history merge करें। प्रश्न का text sets से आता है — पुराने code वाले
+            // device से आया snapshot यहीं हटा दें, वरना बासी answer key वापस घुस आती।
+            if (stripBankSnapshot(lr)) changed = true;
             const seen = new Set((lr.history || []).map(h => h.date + "|" + h.outcome + "|" + h.chosen));
             (rr.history || []).forEach(h => {
               const k = h.date + "|" + h.outcome + "|" + h.chosen;
@@ -1007,6 +1028,25 @@
         return changed;
       } catch (e) { return false; }
     }
+    // question-bank अब सिर्फ़ qid + outcome history रखता है। प्रश्न का text/answer मौजूदा sets से
+    // हल होता है (buildQuestionIndex), इसलिए यहाँ snapshot नहीं रखा जाता — इससे storage आधे से
+    // ज़्यादा घटती है और सुधारा हुआ answer key तुरंत redo में भी दिखता है (पुराना snapshot बासी रहता था)।
+    function stripBankSnapshot(rec) {
+      let had = false;
+      ["subject", "topic", "question", "options", "answer", "explanation"].forEach(k => {
+        if (k in rec) { delete rec[k]; had = true; }
+      });
+      return had; // पुराने entries का snapshot हटता जाए — save होते-होते अपने-आप migrate हो जाता है
+    }
+    // सभी मौजूदा sets से qid → प्रश्न का index। redo/इतिहास इसी से हल होते हैं।
+    function buildQuestionIndex() {
+      const idx = {};
+      state.sets.forEach(s => {
+        if (s.isRedo) return;
+        (s.questions || []).forEach(q => { if (q.qid && !idx[q.qid]) idx[q.qid] = q; });
+      });
+      return idx;
+    }
     // हर हल किए प्रश्न का outcome question-bank में रखें (recall/redo के लिए)। qid से dedup होता है।
     function updateQuestionBank(set, answers) {
       const bank = loadBank();
@@ -1016,12 +1056,26 @@
         const chosen = answers[i];
         const outcome = chosen === null ? "skipped" : (chosen === q.answer ? "correct" : "wrong");
         const rec = bank[qid] || (bank[qid] = { qid, history: [] });
-        // snapshot ताज़ा रखें ताकि set delete होने पर भी प्रश्न redo हो सके।
-        rec.subject = q.subject; rec.topic = q.topic || "";
-        rec.question = q.question; rec.options = q.options; rec.answer = q.answer; rec.explanation = q.explanation || "";
+        stripBankSnapshot(rec);
         rec.history.push({ date: now, outcome, chosen });
       });
       saveBank(bank);
+    }
+    // किसी भी मौजूदा set में न रहने वाले qid हटाएँ — deleted/बदले हुए sets का अवशेष।
+    // ⚠️ सुरक्षा: सिर्फ़ तभी चलाएँ जब cloud से sets सफलतापूर्वक आ चुके हों। अधूरी set list पर
+    // चलाने से (offline/pull विफल) असली history मिट जाती।
+    function pruneOrphanBankEntries() {
+      if (!state.setsSyncedFromCloud) return 0;
+      const idx = buildQuestionIndex();
+      if (!Object.keys(idx).length) return 0; // कुछ भी resolve नहीं हो रहा — कुछ न हटाएँ
+      const bank = loadBank();
+      let removed = 0, stripped = 0;
+      Object.keys(bank).forEach(qid => {
+        if (!idx[qid]) { delete bank[qid]; removed++; return; }
+        if (stripBankSnapshot(bank[qid])) stripped++;
+      });
+      if (removed || stripped) saveBank(bank);
+      return removed;
     }
 
     // Cloud merges can append older events after newer local ones, so array order is not a
@@ -1056,6 +1110,7 @@
         results.unshift({
           id: uid(),
           setId: set.id,
+          setCloudId: set.cloudId || null, // set delete होने पर id से purge हो सके
           title: set.title,
           date: new Date().toISOString(),
           total: set.questions.length,
@@ -1083,18 +1138,26 @@
     // Redo deck में केवल unresolved प्रश्न रखें। नवीनतम उत्तर सही होते ही प्रश्न हट जाता है।
     function getMistakeRecords() {
       const bank = loadBank();
-      const recs = Object.values(bank).filter(r => {
-        if (!Array.isArray(r.history) || !r.history.some(h => h.outcome === "wrong")) return false;
-        const latest = latestQuestionOutcome(r.history);
-        return latest && latest.outcome !== "correct";
-      });
-      recs.forEach(r => {
+      const idx = buildQuestionIndex();
+      const recs = [];
+      Object.values(bank).forEach(r => {
+        // प्रश्न किसी मौजूदा set में नहीं (set delete/बदल गया) → redo में न दिखाएँ।
+        const q = idx[r.qid];
+        if (!q) return;
+        if (!Array.isArray(r.history) || !r.history.some(h => h.outcome === "wrong")) return;
         const last = latestQuestionOutcome(r.history);
-        r._lastOutcome = last.outcome;
-        r._lastDate = last.date;
-        r._wrongCount = r.history.filter(h => h.outcome === "wrong").length;
-        r._key = topicKey(r.subject, r.topic);
-        r._label = topicLabel(r.subject, r.topic);
+        if (!last || last.outcome === "correct") return;
+        // प्रश्न का text/answer हमेशा set से — bank से नहीं। सुधार तुरंत यहाँ भी लागू होता है।
+        recs.push({
+          qid: r.qid, history: r.history,
+          subject: q.subject || "", topic: q.topic || "",
+          question: q.question, options: q.options, answer: q.answer, explanation: q.explanation || "",
+          _lastOutcome: last.outcome,
+          _lastDate: last.date,
+          _wrongCount: r.history.filter(h => h.outcome === "wrong").length,
+          _key: topicKey(q.subject, q.topic),
+          _label: topicLabel(q.subject, q.topic)
+        });
       });
       recs.sort((a, b) => (a._lastDate < b._lastDate ? 1 : -1));
       return recs;
@@ -1158,7 +1221,9 @@
           await pullCloudAttempts();
           await resyncPendingAttempts(); // recover attempts that failed to upload earlier (offline/old bug)
           await resyncPendingSets();     // recover sets+notes that never reached the cloud (offline/logged-out import)
-          await pullCloudBank(); pushCloudBank(); // sync redo question-bank across devices
+          await pullCloudBank();
+          pruneOrphanBankEntries(); // deleted sets के अवशेष हटाएँ (sets sync होने के बाद ही)
+          pushCloudBank(); // sync redo question-bank across devices
           render();
         } else if (state.view === "home") {
           state.view = "login"; render(); // पहली बार — login माँगें
@@ -1296,22 +1361,33 @@
           if (blocked) { alert("Cannot delete this exam right now.\n\n" + blocked + "\n\nIt exists in the cloud, so deleting it only on this device would bring it back on the next sync."); return; }
         }
         const synced = set.cloudId && sb && state.user;
-        // confirmation dialog — only this one exam is deleted.
-        const msg = synced
-          ? `Delete '${set.title}'?\n\n⚠️ This also deletes it from the cloud — this one exam will be gone from all devices.`
-          : `Delete '${set.title}'? (this device only)`;
+        // confirmation dialog — set के साथ उसका पूरा record जाता है, इसलिए साफ़-साफ़ बताएँ।
+        const msg = `Delete '${set.title}'?\n\nThis also removes:\n• its score history\n• its questions from the redo deck\n• its notes\n\n`
+          + (synced ? "⚠️ It is deleted from the cloud too — gone from all devices." : "(this device only)");
         if (!confirm(msg)) return;
         if (synced) {
           try {
+            // exam_sets row हटते ही attempts की rows FK cascade से अपने-आप हट जाती हैं।
             const { error } = await sb.from("exam_sets").delete().eq("id", set.cloudId); // only this one row
             if (error) throw error;
           } catch (e) { alert("Could not delete from cloud, please try again: " + (e.message || e)); return; }
         }
+        // ---- local record भी हटाएँ, पूरी तरह id से (title मिलान कहीं नहीं) ----
+        const qids = new Set((set.questions || []).map(q => q.qid).filter(Boolean));
+        const bank = loadBank();
+        let bankRemoved = 0;
+        qids.forEach(qid => { if (bank[qid]) { delete bank[qid]; bankRemoved++; } });
+        if (bankRemoved) { saveBank(bank); pushCloudBank(); }
+        const keptResults = loadResults().filter(r =>
+          r.setId !== set.id && !(set.cloudId && r.setCloudId && r.setCloudId === set.cloudId));
+        saveResults(keptResults);
+        const notes = readNotes();
+        if (notes[set.id] != null) { delete notes[set.id]; localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); }
         clearSession(set.id); // deleted set की session भी हटाएँ
         state.sets = state.sets.filter(s => s.id !== set.id);
         state.selectedSetId = state.sets[0].id;
         saveSets(); saveCurrent();
-        state.cloudMsg = synced ? "🗑️ Exam deleted from the cloud." : "";
+        state.cloudMsg = synced ? "🗑️ Exam and its records deleted from the cloud." : "";
         render();
       },
       start() {
@@ -1345,7 +1421,7 @@
         state.view = "history"; render();
         if (await pullCloudAttempts()) render();
       },
-      async showRedo() { state.view = "redo"; render(); const a = await pullCloudAttempts(); const b = await pullCloudBank(); if (a || b) render(); },
+      async showRedo() { state.view = "redo"; render(); const a = await pullCloudAttempts(); const b = await pullCloudBank(); pruneOrphanBankEntries(); if (a || b) render(); },
       showNotes(setId) { state.notesText = getNoteForSet(setId); state.notesEditMode = !state.notesText; state.view = "notes"; render(); },
       editNote() { state.notesEditMode = true; render(); },
       notesInput(el) { state.notesText = el.value; },
@@ -1365,7 +1441,9 @@
           await pullCloudAttempts();
           await resyncPendingAttempts(); // recover attempts that failed to upload earlier (offline/old bug)
           await resyncPendingSets();     // recover sets+notes that never reached the cloud (offline/logged-out import)
-          await pullCloudBank(); pushCloudBank(); // sync redo question-bank across devices
+          await pullCloudBank();
+          pruneOrphanBankEntries(); // deleted sets के अवशेष हटाएँ (sets sync होने के बाद ही)
+          pushCloudBank(); // sync redo question-bank across devices
           state.view = "home"; render();
         } catch (e) { state.authError = String(e.message || e); state.authBusy = false; render(); }
       },
@@ -1391,7 +1469,9 @@
         await pullCloudAttempts();                 // match anything already in the cloud first (avoids duplicates)
         const { pushed, pending } = await resyncPendingAttempts();
         const sets = await resyncPendingSets();    // सेट+notes जो कभी cloud पर नहीं पहुँचे
-        await pullCloudBank(); await pushCloudBank(); // also sync the redo question-bank both ways
+        await pullCloudBank();
+        pruneOrphanBankEntries(); // deleted sets के अवशेष हटाएँ (sets sync होने के बाद ही)
+        await pushCloudBank(); // also sync the redo question-bank both ways
         // reload cloud rows so the freshly-pushed tests show up in the dashboard
         try {
           const { data } = await sb.from("attempts").select("*").order("created_at", { ascending: false });
