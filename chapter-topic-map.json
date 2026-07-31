@@ -1,0 +1,1652 @@
+{
+  "note": "Maps each of the 183 Testbook SUPERTET chapter tests to one approved subjectId/topicId. Codes flagged isNewTopic must be added to TAXONOMY in index.html and merged to main BEFORE importing any set that uses them (normalizeSet is strict).",
+  "chapters": [
+    {
+      "testbookTab": "HIN",
+      "ct": 1,
+      "chapter": "वर्ण विचार",
+      "subjectId": "HIN",
+      "topicId": "VAR",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 2,
+      "chapter": "संज्ञा",
+      "subjectId": "HIN",
+      "topicId": "SNG",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 3,
+      "chapter": "सर्वनाम",
+      "subjectId": "HIN",
+      "topicId": "SRV",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 4,
+      "chapter": "क्रिया",
+      "subjectId": "HIN",
+      "topicId": "KRI",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 5,
+      "chapter": "विशेषण",
+      "subjectId": "HIN",
+      "topicId": "VIS",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 6,
+      "chapter": "लिंग",
+      "subjectId": "HIN",
+      "topicId": "LIN",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 7,
+      "chapter": "वचन",
+      "subjectId": "HIN",
+      "topicId": "VCH",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 8,
+      "chapter": "काल",
+      "subjectId": "HIN",
+      "topicId": "KAL",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 9,
+      "chapter": "कारक",
+      "subjectId": "HIN",
+      "topicId": "KAR",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 10,
+      "chapter": "वाच्य",
+      "subjectId": "HIN",
+      "topicId": "VAC",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 11,
+      "chapter": "संधि",
+      "subjectId": "HIN",
+      "topicId": "SAND",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 12,
+      "chapter": "समास",
+      "subjectId": "HIN",
+      "topicId": "SAM",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 13,
+      "chapter": "रस",
+      "subjectId": "HIN",
+      "topicId": "RAS",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 14,
+      "chapter": "छन्द",
+      "subjectId": "HIN",
+      "topicId": "CHND",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 15,
+      "chapter": "अलंकार",
+      "subjectId": "HIN",
+      "topicId": "ALN",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 16,
+      "chapter": "क्रिया विशेषण",
+      "subjectId": "HIN",
+      "topicId": "KVIS",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 17,
+      "chapter": "अव्यय और निपात",
+      "subjectId": "HIN",
+      "topicId": "AVY",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 18,
+      "chapter": "क्रम व्यवस्थापन",
+      "subjectId": "HIN",
+      "topicId": "KRAM",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 19,
+      "chapter": "विराम चिन्ह",
+      "subjectId": "HIN",
+      "topicId": "DEV",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 20,
+      "chapter": "पर्यायवाची शब्द",
+      "subjectId": "HIN",
+      "topicId": "PAR",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 21,
+      "chapter": "विलोम शब्द",
+      "subjectId": "HIN",
+      "topicId": "VIL",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 22,
+      "chapter": "वर्तनी",
+      "subjectId": "HIN",
+      "topicId": "VART",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 23,
+      "chapter": "वाक्यगत अशुद्धियाँ और उनका शोधन",
+      "subjectId": "HIN",
+      "topicId": "VSH",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 24,
+      "chapter": "उपसर्ग",
+      "subjectId": "HIN",
+      "topicId": "UPS",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 25,
+      "chapter": "प्रत्यय",
+      "subjectId": "HIN",
+      "topicId": "PRT",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 26,
+      "chapter": "रिक्त स्थानों की पूर्ति",
+      "subjectId": "HIN",
+      "topicId": "RIKT",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 27,
+      "chapter": "मुहावरे और लोकोक्तियाँ",
+      "subjectId": "HIN",
+      "topicId": "MUH",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 28,
+      "chapter": "तत्सम और तद्भव शब्द",
+      "subjectId": "HIN",
+      "topicId": "TAT",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 29,
+      "chapter": "देशज और विदेशज शब्द",
+      "subjectId": "HIN",
+      "topicId": "DESH",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 30,
+      "chapter": "रूढ़, यौगिक और यौगरूढ़ शब्द",
+      "subjectId": "HIN",
+      "topicId": "RUDH",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 31,
+      "chapter": "भिन्नार्थक शब्द",
+      "subjectId": "HIN",
+      "topicId": "BHIN",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 32,
+      "chapter": "अनेकार्थक शब्द",
+      "subjectId": "HIN",
+      "topicId": "ANRTH",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 33,
+      "chapter": "वाक्यांश के लिए एक शब्द",
+      "subjectId": "HIN",
+      "topicId": "ANEK",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 34,
+      "chapter": "गद्यांश-01",
+      "subjectId": "HIN",
+      "topicId": "GAD",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 35,
+      "chapter": "गद्यांश-02",
+      "subjectId": "HIN",
+      "topicId": "GAD",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 36,
+      "chapter": "पद्यांश-01",
+      "subjectId": "HIN",
+      "topicId": "PAD",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 37,
+      "chapter": "पद्यांश-02",
+      "subjectId": "HIN",
+      "topicId": "PAD",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "HIN",
+      "ct": 38,
+      "chapter": "रचना एवं रचनाकार",
+      "subjectId": "HIN",
+      "topicId": "KAVI",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 1,
+      "chapter": "Vocabulary",
+      "subjectId": "ENG",
+      "topicId": "VOC",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 2,
+      "chapter": "Fill in the blanks - Vocabulary",
+      "subjectId": "ENG",
+      "topicId": "VOC",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 3,
+      "chapter": "Sentence Improvement",
+      "subjectId": "ENG",
+      "topicId": "SENT",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 4,
+      "chapter": "Correct Sentence",
+      "subjectId": "ENG",
+      "topicId": "SENT",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 5,
+      "chapter": "Proverbs",
+      "subjectId": "ENG",
+      "topicId": "PROV",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 6,
+      "chapter": "Error Spotting",
+      "subjectId": "ENG",
+      "topicId": "ERR",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 7,
+      "chapter": "Idiom & Phrase Meaning",
+      "subjectId": "ENG",
+      "topicId": "IDI",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 8,
+      "chapter": "Tense",
+      "subjectId": "ENG",
+      "topicId": "TENS",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 9,
+      "chapter": "Verb",
+      "subjectId": "ENG",
+      "topicId": "VERB",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 10,
+      "chapter": "Conjunction",
+      "subjectId": "ENG",
+      "topicId": "CONJ",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 11,
+      "chapter": "One Word Substitution",
+      "subjectId": "ENG",
+      "topicId": "OWS",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 12,
+      "chapter": "Phrasal Verbs",
+      "subjectId": "ENG",
+      "topicId": "PHR",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 13,
+      "chapter": "Parts of Speech",
+      "subjectId": "ENG",
+      "topicId": "POS",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 14,
+      "chapter": "Fill in the blanks - Grammar",
+      "subjectId": "ENG",
+      "topicId": "GRAM",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 15,
+      "chapter": "Direct & Indirect Speech",
+      "subjectId": "ENG",
+      "topicId": "NARR",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 16,
+      "chapter": "Subject Verb Agreement",
+      "subjectId": "ENG",
+      "topicId": "SVAG",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 17,
+      "chapter": "Active & Passive Voice",
+      "subjectId": "ENG",
+      "topicId": "VOICE",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 18,
+      "chapter": "Preposition",
+      "subjectId": "ENG",
+      "topicId": "PREP",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 19,
+      "chapter": "Reading Comprehension I",
+      "subjectId": "ENG",
+      "topicId": "COMP",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "ENG",
+      "ct": 20,
+      "chapter": "Reading Comprehension II",
+      "subjectId": "ENG",
+      "topicId": "COMP",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SKT",
+      "ct": 1,
+      "chapter": "समानार्थी शब्द",
+      "subjectId": "SKT",
+      "topicId": "SAMAN",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "SKT",
+      "ct": 2,
+      "chapter": "विपरीतार्थक शब्द",
+      "subjectId": "SKT",
+      "topicId": "VIPR",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "SKT",
+      "ct": 3,
+      "chapter": "उपसर्गाणि",
+      "subjectId": "SKT",
+      "topicId": "UPS",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "SKT",
+      "ct": 4,
+      "chapter": "प्रत्यया",
+      "subjectId": "SKT",
+      "topicId": "PRT",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SKT",
+      "ct": 5,
+      "chapter": "अव्ययानि",
+      "subjectId": "SKT",
+      "topicId": "AVY",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "SKT",
+      "ct": 6,
+      "chapter": "शब्दरूपाणि",
+      "subjectId": "SKT",
+      "topicId": "SHD",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SKT",
+      "ct": 7,
+      "chapter": "धातुरूपाणि",
+      "subjectId": "SKT",
+      "topicId": "DHA",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SKT",
+      "ct": 8,
+      "chapter": "सन्धय",
+      "subjectId": "SKT",
+      "topicId": "SAND",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SKT",
+      "ct": 9,
+      "chapter": "समासा",
+      "subjectId": "SKT",
+      "topicId": "SAM",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SKT",
+      "ct": 10,
+      "chapter": "वाच्यविचार",
+      "subjectId": "SKT",
+      "topicId": "VAC",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SKT",
+      "ct": 11,
+      "chapter": "गद्यांश - 01",
+      "subjectId": "SKT",
+      "topicId": "PATH",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SKT",
+      "ct": 12,
+      "chapter": "गद्यांश - 02",
+      "subjectId": "SKT",
+      "topicId": "PATH",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SKT",
+      "ct": 13,
+      "chapter": "पद्यांश - 01",
+      "subjectId": "SKT",
+      "topicId": "PAD",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "SKT",
+      "ct": 14,
+      "chapter": "पद्यांश - 02",
+      "subjectId": "SKT",
+      "topicId": "PAD",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 1,
+      "chapter": "Numerical Ability",
+      "subjectId": "MATH",
+      "topicId": "NUM",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 2,
+      "chapter": "Mathematical Operations",
+      "subjectId": "MATH",
+      "topicId": "OPS",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 3,
+      "chapter": "Decimals",
+      "subjectId": "MATH",
+      "topicId": "DEC",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 4,
+      "chapter": "Place Value",
+      "subjectId": "MATH",
+      "topicId": "PLACE",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 5,
+      "chapter": "Fractions",
+      "subjectId": "MATH",
+      "topicId": "FRAC",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 6,
+      "chapter": "Interest",
+      "subjectId": "MATH",
+      "topicId": "SI",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 7,
+      "chapter": "Profit and Loss",
+      "subjectId": "MATH",
+      "topicId": "PROF",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 8,
+      "chapter": "Percentage",
+      "subjectId": "MATH",
+      "topicId": "PERC",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 9,
+      "chapter": "Divisibility Rule",
+      "subjectId": "MATH",
+      "topicId": "DIV",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 10,
+      "chapter": "Factorization",
+      "subjectId": "MATH",
+      "topicId": "FACT",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 11,
+      "chapter": "Unitary Method",
+      "subjectId": "MATH",
+      "topicId": "UNIT",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 12,
+      "chapter": "Elementary Algebra",
+      "subjectId": "MATH",
+      "topicId": "ALG",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 13,
+      "chapter": "Mensuration",
+      "subjectId": "MATH",
+      "topicId": "MENS",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 14,
+      "chapter": "Average",
+      "subjectId": "MATH",
+      "topicId": "AVG",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 15,
+      "chapter": "Volume",
+      "subjectId": "MATH",
+      "topicId": "VOL",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 16,
+      "chapter": "Ratio and Proportion",
+      "subjectId": "MATH",
+      "topicId": "RAT",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 17,
+      "chapter": "Geometry",
+      "subjectId": "MATH",
+      "topicId": "GEO",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "MATH",
+      "ct": 18,
+      "chapter": "Elementary Statistics",
+      "subjectId": "MATH",
+      "topicId": "DATA",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SCI",
+      "ct": 1,
+      "chapter": "Science in Everyday Life",
+      "subjectId": "SCI",
+      "topicId": "DAILY",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "SCI",
+      "ct": 2,
+      "chapter": "Motion",
+      "subjectId": "SCI",
+      "topicId": "MOT",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "SCI",
+      "ct": 3,
+      "chapter": "Force",
+      "subjectId": "SCI",
+      "topicId": "FORC",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SCI",
+      "ct": 4,
+      "chapter": "Energy",
+      "subjectId": "SCI",
+      "topicId": "WORK",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SCI",
+      "ct": 5,
+      "chapter": "Distance & Measurement",
+      "subjectId": "SCI",
+      "topicId": "MEAS",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "SCI",
+      "ct": 6,
+      "chapter": "Light",
+      "subjectId": "SCI",
+      "topicId": "LIGHT",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SCI",
+      "ct": 7,
+      "chapter": "Sound",
+      "subjectId": "SCI",
+      "topicId": "SOUND",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SCI",
+      "ct": 8,
+      "chapter": "Cell",
+      "subjectId": "SCI",
+      "topicId": "CELL",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SCI",
+      "ct": 9,
+      "chapter": "Human Body",
+      "subjectId": "SCI",
+      "topicId": "HUM",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SCI",
+      "ct": 10,
+      "chapter": "Health & Diseases",
+      "subjectId": "SCI",
+      "topicId": "DIS",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SCI",
+      "ct": 11,
+      "chapter": "Nutrition",
+      "subjectId": "SCI",
+      "topicId": "NUT",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SCI",
+      "ct": 12,
+      "chapter": "Environment",
+      "subjectId": "SCI",
+      "topicId": "ENV",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SCI",
+      "ct": 13,
+      "chapter": "Natural Resources",
+      "subjectId": "SCI",
+      "topicId": "RES",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "SCI",
+      "ct": 14,
+      "chapter": "Matter",
+      "subjectId": "SCI",
+      "topicId": "MAT",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "SCI",
+      "ct": 15,
+      "chapter": "States of Matter",
+      "subjectId": "SCI",
+      "topicId": "STATE",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 1,
+      "chapter": "Earth Structure",
+      "subjectId": "SST",
+      "topicId": "EARTH",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 2,
+      "chapter": "Rivers",
+      "subjectId": "SST",
+      "topicId": "RIV",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 3,
+      "chapter": "Mountains",
+      "subjectId": "SST",
+      "topicId": "MTN",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 4,
+      "chapter": "Continents",
+      "subjectId": "SST",
+      "topicId": "CONT",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 5,
+      "chapter": "Oceans",
+      "subjectId": "SST",
+      "topicId": "OCEAN",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 6,
+      "chapter": "Living Organisms",
+      "subjectId": "EVS",
+      "topicId": "LIFE",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 7,
+      "chapter": "Natural Resources",
+      "subjectId": "EVS",
+      "topicId": "NAT",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 8,
+      "chapter": "Sky & Celestial Bodies",
+      "subjectId": "SST",
+      "topicId": "SOLAR",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 9,
+      "chapter": "Indian Constitution",
+      "subjectId": "SST",
+      "topicId": "CON",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 10,
+      "chapter": "Indian Culture",
+      "subjectId": "EVS",
+      "topicId": "CULT",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 11,
+      "chapter": "Indian Geography",
+      "subjectId": "SST",
+      "topicId": "IND",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 12,
+      "chapter": "Governance System",
+      "subjectId": "SST",
+      "topicId": "GOV",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 13,
+      "chapter": "Transport",
+      "subjectId": "EVS",
+      "topicId": "TRAV",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 14,
+      "chapter": "Road Safety",
+      "subjectId": "EVS",
+      "topicId": "ROAD",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 15,
+      "chapter": "Indian Economy",
+      "subjectId": "SST",
+      "topicId": "ECO",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 16,
+      "chapter": "Agriculture",
+      "subjectId": "SST",
+      "topicId": "AGRI",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 17,
+      "chapter": "Cultural Heritage",
+      "subjectId": "SST",
+      "topicId": "HERIT",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 18,
+      "chapter": "Occupations",
+      "subjectId": "EVS",
+      "topicId": "WORK",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "EVSST",
+      "ct": 19,
+      "chapter": "Natural Disaster Management",
+      "subjectId": "EVS",
+      "topicId": "DIS",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "TEACH",
+      "ct": 1,
+      "chapter": "Methods & Skills of Teaching",
+      "subjectId": "TEACH",
+      "topicId": "METH",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "TEACH",
+      "ct": 2,
+      "chapter": "Principles of Teaching",
+      "subjectId": "TEACH",
+      "topicId": "PRIN",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "TEACH",
+      "ct": 3,
+      "chapter": "Current Indian Society & Elementary Education",
+      "subjectId": "TEACH",
+      "topicId": "SOC",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "TEACH",
+      "ct": 4,
+      "chapter": "Inclusive Education",
+      "subjectId": "TEACH",
+      "topicId": "INC",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "TEACH",
+      "ct": 5,
+      "chapter": "Assessment & Evaluation",
+      "subjectId": "TEACH",
+      "topicId": "EVAL",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "TEACH",
+      "ct": 6,
+      "chapter": "Early Reading Skills",
+      "subjectId": "TEACH",
+      "topicId": "READ",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "TEACH",
+      "ct": 7,
+      "chapter": "Educational Management & Administration",
+      "subjectId": "TEACH",
+      "topicId": "SCHM",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "CDP",
+      "ct": 1,
+      "chapter": "Individual Differences",
+      "subjectId": "CDP",
+      "topicId": "DIV",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "CDP",
+      "ct": 2,
+      "chapter": "Factors Affecting Child Development",
+      "subjectId": "CDP",
+      "topicId": "FACT",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "CDP",
+      "ct": 3,
+      "chapter": "Identification of Learning Needs",
+      "subjectId": "CDP",
+      "topicId": "NEEDS",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "CDP",
+      "ct": 4,
+      "chapter": "Theories of Learning",
+      "subjectId": "CDP",
+      "topicId": "THY",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "CDP",
+      "ct": 5,
+      "chapter": "Special Provision for Differently Disabled Students",
+      "subjectId": "CDP",
+      "topicId": "CWS",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "GK",
+      "ct": 1,
+      "chapter": "International Affairs",
+      "subjectId": "GK",
+      "topicId": "WORLD",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "GK",
+      "ct": 2,
+      "chapter": "National Affairs",
+      "subjectId": "GK",
+      "topicId": "INDIA",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "GK",
+      "ct": 3,
+      "chapter": "Famous Places",
+      "subjectId": "GK",
+      "topicId": "PLACE",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "GK",
+      "ct": 4,
+      "chapter": "Famous Persons",
+      "subjectId": "GK",
+      "topicId": "PERS",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "GK",
+      "ct": 5,
+      "chapter": "Books and Authors",
+      "subjectId": "GK",
+      "topicId": "BOOK",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "GK",
+      "ct": 6,
+      "chapter": "Awards and Honours",
+      "subjectId": "GK",
+      "topicId": "AWD",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "GK",
+      "ct": 7,
+      "chapter": "Sports",
+      "subjectId": "GK",
+      "topicId": "SPORT",
+      "treatment": "P",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "GK",
+      "ct": 8,
+      "chapter": "Art and Culture",
+      "subjectId": "GK",
+      "topicId": "ART",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "GK",
+      "ct": 9,
+      "chapter": "UP Current Affairs - 01",
+      "subjectId": "GK",
+      "topicId": "UPCUR",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "GK",
+      "ct": 10,
+      "chapter": "UP Current Affairs - 02",
+      "subjectId": "GK",
+      "topicId": "UPCUR",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "GK",
+      "ct": 11,
+      "chapter": "UP Current Affairs - 03",
+      "subjectId": "GK",
+      "topicId": "UPCUR",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 1,
+      "chapter": "Analogies",
+      "subjectId": "REAS",
+      "topicId": "ANAL",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 2,
+      "chapter": "Assertion and Reason",
+      "subjectId": "REAS",
+      "topicId": "ASSN",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 3,
+      "chapter": "Binary Logic",
+      "subjectId": "REAS",
+      "topicId": "BIN",
+      "treatment": "X",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 4,
+      "chapter": "Classification",
+      "subjectId": "REAS",
+      "topicId": "CLASS",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 5,
+      "chapter": "Clocks and Calendars",
+      "subjectId": "REAS",
+      "topicId": "CLOCK",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 6,
+      "chapter": "Coded Inequalities",
+      "subjectId": "REAS",
+      "topicId": "INEQ",
+      "treatment": "X",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 7,
+      "chapter": "Coding–Decoding",
+      "subjectId": "REAS",
+      "topicId": "COD",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 8,
+      "chapter": "Critical Reasoning",
+      "subjectId": "REAS",
+      "topicId": "CRIT",
+      "treatment": "X",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 9,
+      "chapter": "Cubes",
+      "subjectId": "REAS",
+      "topicId": "CUBE",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 10,
+      "chapter": "Number Series",
+      "subjectId": "REAS",
+      "topicId": "SER",
+      "treatment": "M",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 11,
+      "chapter": "Puzzles",
+      "subjectId": "REAS",
+      "topicId": "PUZ",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 12,
+      "chapter": "Symbols and Notations",
+      "subjectId": "REAS",
+      "topicId": "SYMB",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 13,
+      "chapter": "Venn Diagrams",
+      "subjectId": "REAS",
+      "topicId": "VENN",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 14,
+      "chapter": "Dice",
+      "subjectId": "REAS",
+      "topicId": "DICE",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 15,
+      "chapter": "Data Interpretation",
+      "subjectId": "REAS",
+      "topicId": "DI",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 16,
+      "chapter": "Direction Sense Test",
+      "subjectId": "REAS",
+      "topicId": "DIR",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 17,
+      "chapter": "Grouping and Selections",
+      "subjectId": "REAS",
+      "topicId": "GRP",
+      "treatment": "X",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 18,
+      "chapter": "Inferences",
+      "subjectId": "REAS",
+      "topicId": "INF",
+      "treatment": "X",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "REAS",
+      "ct": 19,
+      "chapter": "Letter Series",
+      "subjectId": "REAS",
+      "topicId": "LSER",
+      "treatment": "M",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "LIFE",
+      "ct": 1,
+      "chapter": "Professional Conduct and Ethics",
+      "subjectId": "LIFE",
+      "topicId": "ETH",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "LIFE",
+      "ct": 2,
+      "chapter": "Motivation",
+      "subjectId": "LIFE",
+      "topicId": "MOT",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "LIFE",
+      "ct": 3,
+      "chapter": "Role of Teacher",
+      "subjectId": "LIFE",
+      "topicId": "ROLE",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "LIFE",
+      "ct": 4,
+      "chapter": "Constitutional & Human Values",
+      "subjectId": "LIFE",
+      "topicId": "CONST",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "LIFE",
+      "ct": 5,
+      "chapter": "Effective Use of Punishment & Rewards",
+      "subjectId": "LIFE",
+      "topicId": "PUN",
+      "treatment": "P",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "COMP",
+      "ct": 1,
+      "chapter": "Introduction to Information Technology",
+      "subjectId": "COMP",
+      "topicId": "BAS",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "COMP",
+      "ct": 2,
+      "chapter": "IT in Education",
+      "subjectId": "COMP",
+      "topicId": "EDU",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "COMP",
+      "ct": 3,
+      "chapter": "IT for Teaching Skills",
+      "subjectId": "COMP",
+      "topicId": "EDU",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "COMP",
+      "ct": 4,
+      "chapter": "IT in Classroom Teaching",
+      "subjectId": "COMP",
+      "topicId": "CLASS",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "COMP",
+      "ct": 5,
+      "chapter": "IT in School Management",
+      "subjectId": "COMP",
+      "topicId": "SCHM",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "COMP",
+      "ct": 6,
+      "chapter": "Computers in Education",
+      "subjectId": "COMP",
+      "topicId": "EDU",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "COMP",
+      "ct": 7,
+      "chapter": "Internet in Education",
+      "subjectId": "COMP",
+      "topicId": "INT",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "COMP",
+      "ct": 8,
+      "chapter": "Computer Networks",
+      "subjectId": "COMP",
+      "topicId": "NET",
+      "treatment": "S",
+      "isNewTopic": false
+    },
+    {
+      "testbookTab": "COMP",
+      "ct": 9,
+      "chapter": "Open Educational Resources (OER)",
+      "subjectId": "COMP",
+      "topicId": "OER",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "COMP",
+      "ct": 10,
+      "chapter": "Educational Apps",
+      "subjectId": "COMP",
+      "topicId": "SMART",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "COMP",
+      "ct": 11,
+      "chapter": "Digital Teaching Materials",
+      "subjectId": "COMP",
+      "topicId": "DIGI",
+      "treatment": "S",
+      "isNewTopic": true
+    },
+    {
+      "testbookTab": "COMP",
+      "ct": 12,
+      "chapter": "Online Learning & Virtual Classrooms",
+      "subjectId": "COMP",
+      "topicId": "ELRN",
+      "treatment": "S",
+      "isNewTopic": true
+    }
+  ]
+}
