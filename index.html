@@ -658,6 +658,7 @@
       confirmAction: null,
       importText: "",
       importError: "",
+      importBusy: false,
       lastMessage: "",
       timerId: null,
       reviewFilter: "wrong",
@@ -680,12 +681,27 @@
       try {
         const { data, error } = await sb.from("exam_sets").select("*").order("created_at", { ascending: false });
         if (error || !data) return;
-        let added = 0;
+        let added = 0, refreshed = 0;
         data.forEach(row => {
           const existing = state.sets.find(s => s.cloudId === row.id);
           if (existing) {
             // sync note from cloud (null means column absent — skip; "" means deleted)
             if (row.note != null) saveNoteForSet(existing.id, row.note);
+            // cloud पर set बदला हो (सुधरी answer key/typo) तो local copy भी ताज़ा करें। इसके बिना
+            // जिस device पर set पहले से है वहाँ सुधार कभी पहुँचता ही नहीं — पुराना ही चलता रहता है।
+            const busyWithIt = state.activeSet && state.activeSet.id === existing.id && state.started && !state.finished;
+            if (busyWithIt) return; // exam बीच में है — प्रश्न नीचे से न बदलें
+            try {
+              const fresh = normalizeSet({ title: row.title, durationMinutes: row.duration_minutes, questions: row.questions });
+              if (existing.title !== fresh.title || existing.durationMinutes !== fresh.durationMinutes
+                  || stableStringify(existing.questions) !== stableStringify(fresh.questions)) {
+                existing.title = fresh.title;
+                existing.durationMinutes = fresh.durationMinutes;
+                existing.questions = fresh.questions;
+                clearSession(existing.id); // पुराने answers बदले हुए प्रश्नों पर लागू नहीं होते
+                refreshed++;
+              }
+            } catch (e) { /* invalid cloud set — local copy जस की तस रखें */ }
             return;
           }
           try {
@@ -696,17 +712,49 @@
             added++;
           } catch (e) { /* invalid cloud set — छोड़ें */ }
         });
-        if (added) { saveSets(); }
+        // built-in sample हटा दें अगर उसी title वाला असली cloud set local में आ चुका है —
+        // वरना खाली device पर दोनों (injected sample + cloud copy) साथ-साथ दिखते हैं।
+        // शर्त कड़ी रखी है: सिर्फ़ तब हटाएँ जब cloudId वाली copy सचमुच मौजूद हो (invalid cloud
+        // set normalizeSet में reject हो सकता है — तब sample ही इकलौता set रह जाना चाहिए)।
+        const syncedTitles = new Set(state.sets.filter(s => s.cloudId).map(s => s.title));
+        const dropped = state.sets.filter(s => s.isLocalOnly && syncedTitles.has(s.title));
+        if (dropped.length) {
+          dropped.forEach(s => clearSession(s.id));
+          state.sets = state.sets.filter(s => !dropped.includes(s));
+          if (!state.sets.some(s => s.id === state.selectedSetId)) { state.selectedSetId = state.sets[0].id; saveCurrent(); }
+        }
+        if (added || refreshed || dropped.length) { saveSets(); }
       } catch (e) { /* network — ignore */ }
     }
-    async function pushCloudSet(set) {
-      if (!sb || !state.user) return;
+    // cloud पर set डालें (नया) या बदलें (existingCloudId हो तो)। गड़बड़ी पर throw —
+    // caller तय करे कि error दिखाना है (import) या चुपचाप छोड़ना (best-effort resync)।
+    async function cloudSaveSet(set, existingCloudId) {
+      const payload = { title: set.title, duration_minutes: set.durationMinutes, questions: set.questions };
+      if (existingCloudId) {
+        const { error } = await sb.from("exam_sets").update(payload).eq("id", existingCloudId);
+        if (error) throw error;
+        return existingCloudId;
+      }
+      // सिर्फ़ id वापस लें — पूरा questions blob दोबारा download न हो।
+      const { data, error } = await sb.from("exam_sets").insert(payload).select("id").single();
+      if (error || !data) throw (error || new Error("Cloud did not return an id."));
+      return data.id;
+    }
+    // quiet=true → bulk resync के लिए: न cloudMsg, न render, न per-set saveSets (caller एक बार save करे)।
+    async function pushCloudSet(set, quiet) {
+      if (!sb || !state.user) return false;
       try {
-        const { data, error } = await sb.from("exam_sets")
-          .insert({ title: set.title, duration_minutes: set.durationMinutes, questions: set.questions })
-          .select().single();
-        if (!error && data) { set.cloudId = data.id; saveSets(); state.cloudMsg = "☁️ Uploaded to cloud — reload on the other device to see it."; render(); }
-      } catch (e) { /* ignore */ }
+        set.cloudId = await cloudSaveSet(set, null);
+        if (!quiet) { saveSets(); state.cloudMsg = "☁️ Uploaded to cloud — reload on the other device to see it."; render(); }
+        return true;
+      } catch (e) { return false; }
+    }
+    // cloud क्यों नहीं पहुँच सके — user को साफ़ कारण दिखाने के लिए (import अब चुपचाप fail नहीं होता)।
+    function cloudBlockReason() {
+      if (!sb) return "The cloud library did not load (offline, or opened as a file:// page). Import needs the hosted https:// page.";
+      if (!state.user) return "You are logged out — log in first. Sets are saved to the cloud so they reach every device.";
+      if (navigator.onLine === false) return "You appear to be offline. Reconnect and try again.";
+      return "";
     }
     async function pushCloudNote(set, noteText) {
       if (!sb || !state.user || !set.cloudId) return;
@@ -878,6 +926,35 @@
       for (const r of pending) { if (await pushCloudAttempt(r)) pushed++; }
       return { pushed, pending: pending.length };
     }
+    // किसी भी local set को cloud पर भेजें जो पहले upload नहीं हो पाया (offline या logged-out import)।
+    // बिना cloudId वाला set सिर्फ़ इसी device पर रहता है — browser storage evict हुआ तो set और
+    // उसके notes दोनों हमेशा के लिए चले जाते हैं (pushCloudNote को भी cloudId चाहिए)।
+    async function resyncPendingSets() {
+      if (!sb || !state.user) return { pushed: 0, pending: 0 };
+      // isLocalOnly = built-in sample — जानबूझकर cloud पर नहीं जाता (हर device उसे खुद inject करता है)।
+      const pending = state.sets.filter(s => !s.cloudId && !s.isRedo && !s.isLocalOnly);
+      if (!pending.length) return { pushed: 0, pending: 0 };
+      // पहले cloud के titles देख लें। हर खाली device init() पर अपना DEFAULT_SET inject करता है,
+      // इसलिए इस check के बिना वही set हर device से दोबारा upload होकर duplicate बन जाता।
+      // title = पहचान — यही नियम import का replace भी इस्तेमाल करता है।
+      const byTitle = new Map();
+      try {
+        const { data, error } = await sb.from("exam_sets").select("id,title");
+        if (error) return { pushed: 0, pending: pending.length }; // network — अगली बार फिर कोशिश होगी
+        // import जैसा ही normalized title match — दोनों जगह पहचान का नियम एक रहे।
+        (data || []).forEach(row => { const k = topicNorm(row.title); if (!byTitle.has(k)) byTitle.set(k, row.id); });
+      } catch (e) { return { pushed: 0, pending: pending.length }; }
+      let pushed = 0, changed = false;
+      for (const set of pending) {
+        const existingId = byTitle.get(topicNorm(set.title));
+        if (existingId) { set.cloudId = existingId; changed = true; }        // पहले से cloud पर है — बस link कर दें
+        else if (await pushCloudSet(set, true)) { pushed++; changed = true; }
+        // note सिर्फ़ cloudId होने पर ही जा सकता है — इसलिए link/upload के तुरंत बाद भेजें।
+        if (set.cloudId) { const note = getNoteForSet(set.id); if (note) await pushCloudNote(set, note); }
+      }
+      if (changed) saveSets();
+      return { pushed, pending: pending.length };
+    }
     // पूरी question-bank cloud पर रखें ताकि redo deck हर device पर एक जैसा रहे — per-attempt outcomes पर निर्भर नहीं।
     async function pushCloudBank() {
       if (!sb || !state.user) return;
@@ -1047,7 +1124,11 @@
     function init() {
       state.sets = readJson(SETS_KEY, []);
       if (!state.sets.length) {
-        state.sets = [normalizeSet(DEFAULT_SET)];
+        // built-in sample — सिर्फ़ इसी device पर। cloud पर कभी नहीं जाता, वरना हर खाली device
+        // अपनी एक copy upload करके duplicate बना देता। असली sets import से आते हैं।
+        const sample = normalizeSet(DEFAULT_SET);
+        sample.isLocalOnly = true;
+        state.sets = [sample];
         saveSets();
       }
       const current = localStorage.getItem(CURRENT_KEY);
@@ -1065,6 +1146,7 @@
           await pullCloudSets();
           await pullCloudAttempts();
           await resyncPendingAttempts(); // recover attempts that failed to upload earlier (offline/old bug)
+          await resyncPendingSets();     // recover sets+notes that never reached the cloud (offline/logged-out import)
           await pullCloudBank(); pushCloudBank(); // sync redo question-bank across devices
           render();
         } else if (state.view === "home") {
@@ -1152,28 +1234,56 @@
     window.actions = {
       selectSet(id) { state.selectedSetId = id; saveCurrent(); render(); },
       showImport() { state.view = "import"; state.importError = ""; state.lastMessage = ""; render(); },
+      showLogin() { state.view = "login"; state.authError = ""; render(); },
       backHome() { state.view = "home"; state.importError = ""; render(); },
       loadExample() { state.importText = JSON.stringify(DEFAULT_SET, null, 2); render(); },
       clearImport() { state.importText = ""; render(); },
       importInput(el) { state.importText = el.value; },
-      saveImport(startNow) {
+      // Cloud-first import: पहले cloud पर लिखें, cloudId मिलने के बाद ही local persist करें।
+      // इससे बिना cloudId वाला कोई नया set कभी बनता ही नहीं — न duplicate, न eviction पर हमेशा के लिए गुम।
+      async saveImport(startNow) {
+        if (state.importBusy) return;
+        let set;
         try {
-          const parsed = parseImportText(state.importText);
-          const set = normalizeSet(parsed);
-          const existingIndex = state.sets.findIndex(s => s.title === set.title && s.questions.length === set.questions.length);
-          if (existingIndex >= 0) { clearSession(state.sets[existingIndex].id); state.sets.splice(existingIndex, 1); } // replaced set की orphan session हटाएँ
-          state.sets.unshift(set);
-          state.selectedSetId = set.id;
-          saveSets(); saveCurrent();
-          state.importError = "";
-          state.lastMessage = `Set saved: ${set.title} (${set.questions.length} questions, ${set.durationMinutes} min)`;
-          pushCloudSet(set); // cloud पर भेजें ताकि दूसरे device पर भी दिखे (best-effort)
-          if (startNow) startSet(set, null); else { state.view = "home"; render(); }
-        } catch (e) { state.importError = e.message || String(e); render(); }
+          set = normalizeSet(parseImportText(state.importText)); // taxonomy validation पहले — network से पहले
+        } catch (e) { state.importError = e.message || String(e); render(); return; }
+        const blocked = cloudBlockReason();
+        if (blocked) { state.importError = blocked + " Nothing was imported."; render(); return; }
+        // same title + same question count = वही set (import का पुराना replace नियम)।
+        // title को normalize करके मिलाएँ (topicNorm = trim + एक space + lowercase)। पीछे लगा
+        // space या casing का फ़र्क़ अब गलती से नया cloud row नहीं बनाता।
+        const titleKey = topicNorm(set.title);
+        const existingIndex = state.sets.findIndex(s => topicNorm(s.title) === titleKey && s.questions.length === set.questions.length);
+        const existing = existingIndex >= 0 ? state.sets[existingIndex] : null;
+        state.importBusy = true; state.importError = ""; render();
+        try {
+          // सुधारा हुआ set दोबारा import? उसी cloud row को update करें — नया row बनाकर पुराने को
+          // orphan न करें (वरना दूसरे device पर पुरानी और नई दोनों copy दिखने लगती हैं)।
+          set.cloudId = await cloudSaveSet(set, existing && existing.cloudId);
+          if (existing && existing.cloudId) set.id = existing.id; // notes/results इसी local id से जुड़े हैं
+        } catch (e) {
+          state.importBusy = false;
+          state.importError = `Could not save to the cloud — nothing was imported. ${e.message || e}`;
+          render(); return;
+        }
+        state.importBusy = false;
+        if (existing) { clearSession(existing.id); state.sets.splice(existingIndex, 1); } // replaced set की orphan session हटाएँ
+        state.sets.unshift(set);
+        state.selectedSetId = set.id;
+        saveSets(); saveCurrent();
+        state.importError = "";
+        state.lastMessage = `Set saved${existing && existing.cloudId ? " (updated)" : ""}: ${set.title} (${set.questions.length} questions, ${set.durationMinutes} min)`;
+        if (startNow) startSet(set, null); else { state.view = "home"; render(); }
       },
       async deleteCurrentSet() {
         if (state.sets.length <= 1) { state.lastMessage = "At least one set must remain."; render(); return; }
         const set = currentSet();
+        // cloud पर मौजूद set को offline delete करना बेकार है — अगली pull पर वापस आ जाएगा।
+        // इसलिए cloudId वाले set के लिए cloud पहुँच अनिवार्य है।
+        if (set.cloudId) {
+          const blocked = cloudBlockReason();
+          if (blocked) { alert("Cannot delete this exam right now.\n\n" + blocked + "\n\nIt exists in the cloud, so deleting it only on this device would bring it back on the next sync."); return; }
+        }
         const synced = set.cloudId && sb && state.user;
         // confirmation dialog — only this one exam is deleted.
         const msg = synced
@@ -1243,6 +1353,7 @@
           await pullCloudSets();
           await pullCloudAttempts();
           await resyncPendingAttempts(); // recover attempts that failed to upload earlier (offline/old bug)
+          await resyncPendingSets();     // recover sets+notes that never reached the cloud (offline/logged-out import)
           await pullCloudBank(); pushCloudBank(); // sync redo question-bank across devices
           state.view = "home"; render();
         } catch (e) { state.authError = String(e.message || e); state.authBusy = false; render(); }
@@ -1268,6 +1379,7 @@
         state.resyncBusy = true; render();
         await pullCloudAttempts();                 // match anything already in the cloud first (avoids duplicates)
         const { pushed, pending } = await resyncPendingAttempts();
+        const sets = await resyncPendingSets();    // सेट+notes जो कभी cloud पर नहीं पहुँचे
         await pullCloudBank(); await pushCloudBank(); // also sync the redo question-bank both ways
         // reload cloud rows so the freshly-pushed tests show up in the dashboard
         try {
@@ -1276,7 +1388,11 @@
           mergeCloudAttemptRows(state.dashboardData);
         } catch (e) { /* network — keep current data */ }
         state.resyncBusy = false; render();
-        alert(pending === 0 ? "All local tests are already in the cloud." : `Synced ${pushed} of ${pending} local test(s) to the cloud.`);
+        const lines = [
+          pending === 0 ? "All local tests are already in the cloud." : `Synced ${pushed} of ${pending} local test(s) to the cloud.`,
+          sets.pending === 0 ? "All practice sets are already in the cloud." : `Backed up ${sets.pushed} of ${sets.pending} local practice set(s).`
+        ];
+        alert(lines.join("\n"));
       },
       redoSetTopic(v) { state.redoTopic = v; render(); },
       redoSetLimit(v) { state.redoLimit = v === "all" ? "all" : Number(v); render(); },
@@ -1389,11 +1505,13 @@
         <h1>Question set import</h1>
         <p class="muted">Paste the strict JSON from ChatGPT here. Format: <span class="mono">{ title, durationMinutes, questions:[{ subjectId, topicId, question, options, answer, explanation }] }</span></p>
         <p class="small muted">💡 Each question needs a valid <span class="mono">subjectId</span> and <span class="mono">topicId</span> (from the taxonomy) — an invalid code rejects the whole set.</p>
-        ${state.importError ? `<div class="notice danger"><b>Error:</b> ${esc(state.importError)}</div>` : ""}
+        <p class="small muted">☁️ Sets are saved to the cloud first, so they reach every device — importing needs you logged in and online.</p>
+        ${state.importError ? `<div class="notice danger"><b>Error:</b> ${esc(state.importError)}${!state.user ? ` <button class="btn blue" style="margin-left:8px" onclick="actions.showLogin()">Log in</button>` : ""}</div>` : ""}
+        ${state.importBusy ? `<div class="notice"><b>Saving to cloud…</b> please wait.</div>` : ""}
         <textarea class="textarea" oninput="actions.importInput(this)" placeholder="Paste JSON here...">${esc(state.importText)}</textarea>
         <div class="row" style="margin-top:14px">
-          <button class="btn primary" onclick="actions.saveImport(true)">Save &amp; Start</button>
-          <button class="btn" onclick="actions.saveImport(false)">Only Save</button>
+          <button class="btn primary" ${state.importBusy ? "disabled" : ""} onclick="actions.saveImport(true)">${state.importBusy ? "Saving…" : "Save &amp; Start"}</button>
+          <button class="btn" ${state.importBusy ? "disabled" : ""} onclick="actions.saveImport(false)">${state.importBusy ? "Saving…" : "Only Save"}</button>
           <button class="btn blue" onclick="actions.loadExample()">Load current sample</button>
           <button class="btn warn" onclick="actions.clearImport()">Clear</button>
         </div>
